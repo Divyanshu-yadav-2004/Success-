@@ -10,10 +10,8 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_BACKEND_URL ||
-  "http://localhost:3000/api/v1";
+import { API_BASE_URL } from "@/lib/apiClient";
+
 
 const HERO_IMAGE =
   "https://images.pexels.com/photos/7792841/pexels-photo-7792841.jpeg?auto=compress&cs=tinysrgb&h=650&w=940";

@@ -13,8 +13,34 @@
  *   • 400, 403, 404, and 500 errors NEVER trigger a refresh attempt.
  */
 
-export const API_BASE_URL =
-  import.meta.env.VITE_BACKEND_URL || "http://localhost:3000/api/v1";
+/**
+ * Single source of truth for the backend API base URL.
+ *
+ * Resolution order:
+ *   1. VITE_API_URL  — set this in your .env (local) or deployment env vars (production)
+ *   2. localhost:3000/api/v1 — only allowed in development builds
+ *
+ * In production, if VITE_API_URL is not set the app throws immediately so the
+ * misconfiguration is caught at startup rather than silently calling localhost.
+ */
+function resolveApiBaseUrl(): string {
+  const url = import.meta.env.VITE_API_URL as string | undefined;
+  if (url) return url.replace(/\/$/, ""); // strip any trailing slash
+
+  if (import.meta.env.DEV) {
+    console.warn(
+      "[apiClient] VITE_API_URL is not set — falling back to http://localhost:3000/api/v1 (dev only)",
+    );
+    return "http://localhost:3000/api/v1";
+  }
+
+  throw new Error(
+    "[apiClient] VITE_API_URL is not configured. " +
+      "Set it in your deployment environment variables (e.g. Railway → Variables).",
+  );
+}
+
+export const API_BASE_URL = resolveApiBaseUrl();
 
 export function getAuthHeaders(): Record<string, string> {
   const token = getStoredToken();

@@ -1,9 +1,4 @@
-import { apiRequest, getStoredToken } from "./apiClient";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_BACKEND_URL ||
-  "http://localhost:3000/api/v1";
+import { apiRequest, getStoredToken, API_BASE_URL } from "./apiClient";
 
 let loadPromise: Promise<void> | null = null;
 

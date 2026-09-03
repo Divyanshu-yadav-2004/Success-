@@ -10,7 +10,7 @@ import {
   Eye,
 } from "lucide-react";
 import type { DocumentRequirement } from "@/lib/types";
-import { getStoredToken } from "@/lib/apiClient";
+import { getStoredToken, API_BASE_URL } from "@/lib/apiClient";
 
 export interface UploadedDoc {
   fileName: string;
@@ -33,10 +33,6 @@ const ACCEPTED = ["image/jpeg", "image/png", "application/pdf"];
 const ACCEPTED_EXT = ".jpg,.jpeg,.png,.pdf";
 const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_BACKEND_URL ||
-  "http://localhost:3000/api/v1";
 
 type UploadState =
   | { status: "idle" }

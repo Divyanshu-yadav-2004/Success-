@@ -29,6 +29,7 @@ import {
   getStoredToken,
   setStoredToken,
   removeStoredToken,
+  API_BASE_URL,
 } from "@/lib/apiClient";
 
 // ─────────────────────────────────────────────
@@ -82,11 +83,6 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_BACKEND_URL ||
-  "http://localhost:3000/api/v1";
 
 // ─────────────────────────────────────────────
 // Provider
