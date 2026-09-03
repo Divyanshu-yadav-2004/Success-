@@ -360,9 +360,13 @@ export class AuthService {
         },
       });
 
-      const frontendUrl =
-        this.configService.get<string>("FRONTEND_URL") || "http://localhost:5173";
-      const resetUrl = `${frontendUrl}/reset-password?token=${rawToken}`;
+      const frontendUrl = (
+        this.configService.get<string>("FRONTEND_URL") ||
+        (process.env.NODE_ENV !== "production" ? "http://localhost:5173" : "")
+      ).replace(/\/$/, "");
+      const resetUrl = frontendUrl
+        ? `${frontendUrl}/reset-password?token=${rawToken}`
+        : `/reset-password?token=${rawToken}`;
 
       const userName =
         user.profile?.fullName || email.split("@")[0] || "User";

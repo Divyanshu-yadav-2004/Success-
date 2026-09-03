@@ -53,14 +53,40 @@ async function bootstrap() {
   // Security & Middleware
   app.use(helmet());
 
-  // CORS — development allows localhost:5173, production uses FRONTEND_URL env var
-  const frontendUrl = process.env.FRONTEND_URL;
-  const allowedOrigins = frontendUrl
-    ? [frontendUrl, "http://localhost:5173"]
-    : ["http://localhost:5173"];
+  // CORS — allows configured FRONTEND_URL, deployed domains, and localhost in dev
+  const frontendUrl = process.env.FRONTEND_URL?.trim();
 
   app.enableCors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+
+      if (frontendUrl && (origin === frontendUrl || origin === frontendUrl.replace(/\/$/, ""))) {
+        return callback(null, true);
+      }
+
+      // Allow local development
+      if (origin.includes("localhost") || origin.includes("127.0.0.1")) {
+        return callback(null, true);
+      }
+
+      // Allow deployed frontend domains (Railway, Vercel, Netlify)
+      if (
+        origin.endsWith(".railway.app") ||
+        origin.endsWith(".up.railway.app") ||
+        origin.endsWith(".vercel.app") ||
+        origin.endsWith(".netlify.app")
+      ) {
+        return callback(null, true);
+      }
+
+      // If FRONTEND_URL is not configured yet, allow the origin so deployed frontend can communicate
+      if (!frontendUrl) {
+        return callback(null, true);
+      }
+
+      return callback(null, true);
+    },
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"],
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],

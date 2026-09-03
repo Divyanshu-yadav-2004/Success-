@@ -49,7 +49,10 @@ export class WelcomeService {
     }
 
     const customerName = user.profile?.fullName || user.email.split("@")[0] || "Customer";
-    const frontendUrl = (this.configService.get<string>("FRONTEND_URL") || "http://localhost:5173").replace(/\/$/, "");
+    const frontendUrl = (
+      this.configService.get<string>("FRONTEND_URL") ||
+      (process.env.NODE_ENV !== "production" ? "http://localhost:5173" : "")
+    ).replace(/\/$/, "");
     const registrationDate = new Date(user.createdAt).toLocaleString("en-IN", {
       timeZone: "Asia/Kolkata",
       dateStyle: "medium",

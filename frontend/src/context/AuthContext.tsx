@@ -285,8 +285,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Full-page redirect — browser goes to NestJS Passport Google endpoint.
       // NestJS handles: Google consent → callback → find/create user → JWT →
       //   redirect to /auth/callback?accessToken=...&refreshToken=...
-      // GoogleOAuthCallback component in App.tsx completes the flow.
-      window.location.href = `${API_BASE_URL}/auth/google`;
+      const originParam = encodeURIComponent(window.location.origin);
+      window.location.href = `${API_BASE_URL}/auth/google?origin=${originParam}`;
       return { error: null };
     } catch (err: any) {
       log("signInWithGoogle", "✗ exception —", err?.message);

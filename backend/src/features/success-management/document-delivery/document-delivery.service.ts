@@ -196,7 +196,10 @@ export class DocumentDeliveryService {
       return;
     }
 
-    const frontendUrl = this.configService.get<string>("FRONTEND_URL") || "http://localhost:5173";
+    const frontendUrl = (
+      this.configService.get<string>("FRONTEND_URL") ||
+      (process.env.NODE_ENV !== "production" ? "http://localhost:5173" : "")
+    ).replace(/\/$/, "");
     const emailSubject = `🎉 Your ${serviceName} has arrived - Success MP Online`;
     const htmlContent = generateDocumentDeliveredEmailHtml({
       customerName,

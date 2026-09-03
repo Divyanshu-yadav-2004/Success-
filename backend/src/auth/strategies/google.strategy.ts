@@ -12,9 +12,12 @@ export class GoogleStrategy extends PassportStrategy(Strategy, "google") {
       configService.get<string>("GOOGLE_CLIENT_ID")?.trim() || "not_configured";
     const clientSecret =
       configService.get<string>("GOOGLE_CLIENT_SECRET")?.trim() || "not_configured";
+    const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN?.trim();
     const callbackURL =
       configService.get<string>("GOOGLE_CALLBACK_URL")?.trim() ||
-      "http://localhost:3000/api/v1/auth/google/callback";
+      (railwayDomain
+        ? `https://${railwayDomain}/api/v1/auth/google/callback`
+        : "http://localhost:3000/api/v1/auth/google/callback");
 
     super({
       clientID,

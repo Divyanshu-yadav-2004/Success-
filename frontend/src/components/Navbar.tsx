@@ -5,6 +5,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import LanguageToggle from "@/components/LanguageToggle";
 
+const WHATSAPP_NUMBER = import.meta.env.VITE_WHATSAPP_NUMBER || "919479336535";
+
 export default function Navbar() {
   const { user, profile, isAdmin, signOut, updateProfile } = useAuth();
   const { language, setLanguage, t } = useLanguage();
@@ -86,7 +88,7 @@ export default function Navbar() {
 
             {/* Support */}
             <a
-              href="https://wa.me/919000000000"
+              href={`https://wa.me/${WHATSAPP_NUMBER}`}
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors rounded-lg px-3 py-2 hover:bg-slate-50"
@@ -161,7 +163,7 @@ export default function Navbar() {
               <div className="px-4 py-3 space-y-2">
                 {/* Support */}
                 <a
-                  href="https://wa.me/919000000000"
+                  href={`https://wa.me/${WHATSAPP_NUMBER}`}
                   target="_blank"
                   rel="noreferrer"
                   className="flex items-center gap-3 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg px-3 py-2.5 transition-colors"

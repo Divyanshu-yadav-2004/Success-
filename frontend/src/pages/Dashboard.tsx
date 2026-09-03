@@ -215,7 +215,10 @@ export default function Dashboard() {
       const data = await res.json();
 
       if (data.downloadUrl) {
-        window.open(data.downloadUrl, "_blank");
+        const fullUrl = data.downloadUrl.startsWith("http")
+          ? data.downloadUrl
+          : `${API_BASE_URL.replace(/\/api\/v1$/, "")}${data.downloadUrl.startsWith("/") ? "" : "/"}${data.downloadUrl}`;
+        window.open(fullUrl, "_blank");
       } else {
         alert("Document file path generated: " + (data.fileKey || fileName));
       }

@@ -24,24 +24,16 @@
  * misconfiguration is caught at startup rather than silently calling localhost.
  */
 function resolveApiBaseUrl(): string {
-  const url = import.meta.env.VITE_API_URL as string | undefined;
+  const url = (import.meta.env.VITE_API_URL || import.meta.env.VITE_BACKEND_URL) as string | undefined;
 
-  if (url) {
-    const resolved = url.replace(/\/$/, ""); // strip any trailing slash
+  if (url && url.trim() !== "") {
+    let resolved = url.trim().replace(/\/$/, ""); // strip any trailing slash
 
-    // Guard: VITE_API_URL must include /api/v1 (or equivalent path prefix).
-    // A bare domain like https://example.up.railway.app will produce wrong
-    // OAuth redirect URLs such as /auth/google instead of /api/v1/auth/google.
-    if (!resolved.includes("/api/")) {
-      const msg =
-        `[apiClient] VITE_API_URL "${resolved}" does not contain an API path prefix (e.g. /api/v1). ` +
-        `Google OAuth and all API calls will use wrong URLs. ` +
-        `Expected format: https://your-backend.up.railway.app/api/v1`;
-      if (import.meta.env.DEV) {
-        console.error(msg);
-      } else {
-        throw new Error(msg);
-      }
+    // Automatically append /api/v1 if the user provided the backend domain root
+    if (!resolved.includes("/api")) {
+      resolved = `${resolved}/api/v1`;
+    } else if (resolved.endsWith("/api")) {
+      resolved = `${resolved}/v1`;
     }
 
     if (import.meta.env.DEV) {
