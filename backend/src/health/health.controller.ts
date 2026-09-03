@@ -1,14 +1,18 @@
 import { Controller, Get } from "@nestjs/common";
 import { ApiTags, ApiOperation } from "@nestjs/swagger";
 import { PrismaService } from "../prisma/prisma.service";
+import { MailService } from "../mail/mail.service";
 
 @ApiTags("Health")
 @Controller("health")
 export class HealthController {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private mailService: MailService,
+  ) {}
 
   @Get()
-  @ApiOperation({ summary: "Check system health and database connection" })
+  @ApiOperation({ summary: "Check system health, database connection, and email service status" })
   async checkHealth() {
     let dbStatus = "down";
     let dbDetails: Record<string, any> = {};
@@ -33,6 +37,8 @@ export class HealthController {
       dbStatus = `error: ${err instanceof Error ? err.message : String(err)}`;
     }
 
+    const emailStatus = this.mailService.getSmtpStatus();
+
     return {
       status: dbStatus === "up" ? "ok" : "degraded",
       timestamp: new Date().toISOString(),
@@ -40,6 +46,7 @@ export class HealthController {
       services: {
         api: "up",
         database: dbStatus,
+        email: emailStatus,
         ...(dbStatus === "up" ? { databaseDetails: dbDetails } : {}),
       },
     };

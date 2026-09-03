@@ -32,6 +32,14 @@ async function bootstrap() {
     }
   }
 
+  const emailEnvKeys = [
+    "EMAIL_HOST",
+    "EMAIL_PORT",
+    "EMAIL_USER",
+    "EMAIL_PASSWORD",
+    "EMAIL_FROM",
+  ];
+
   logger.log("--- Environment Configuration Check ---");
   for (const key of requiredEnvKeys) {
     const val = process.env[key];
@@ -45,6 +53,11 @@ async function bootstrap() {
     const val = process.env[key];
     const isPresent = !!(val && val.trim() !== "" && !val.includes("YOUR_"));
     logger.log(`ENV [${key}]: ${isPresent ? "✓ PRESENT" : "○ NOT SET (optional)"}`);
+  }
+  for (const key of emailEnvKeys) {
+    const val = process.env[key];
+    const isPresent = !!(val && val.trim() !== "" && !val.includes("YOUR_") && !val.includes("placeholder") && !val.toLowerCase().includes("dummy"));
+    logger.log(`ENV [${key}]: ${isPresent ? "✓ PRESENT" : "○ NOT SET"}`);
   }
   logger.log("---------------------------------------");
 

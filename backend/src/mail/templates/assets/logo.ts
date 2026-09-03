@@ -15,7 +15,7 @@ export const OFFICIAL_LOGO_CONFIG = {
   brandName: "Success MP Online",
   subTitle: "Government Digital Services Portal",
   stateTag: "Government of Madhya Pradesh",
-  officialUrl: "http://localhost:5173", // default fallback if FRONTEND_URL is not set
+  officialUrl: "https://successmponline.in", // production portal URL
   logoWidth: 140,
   logoHeight: 140,
 };

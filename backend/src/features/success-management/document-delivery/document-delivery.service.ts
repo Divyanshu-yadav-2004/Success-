@@ -10,7 +10,7 @@ import { ApplicationStatus, NotificationChannel, NotificationStatus } from "@pri
 import { NotificationEngineService } from "../notifications/notification-engine.service";
 import { NotificationType } from "../notifications/notification.types";
 import { generateDocumentDeliveredEmailHtml, generateDocumentDeliveredEmailText } from "../email/document-delivered.template";
-import * as nodemailer from "nodemailer";
+import { MailService } from "../../../mail/mail.service";
 
 @Injectable()
 export class DocumentDeliveryService {
@@ -20,6 +20,7 @@ export class DocumentDeliveryService {
     private readonly prisma: PrismaService,
     private readonly configService: ConfigService,
     private readonly notificationEngine: NotificationEngineService,
+    private readonly mailService: MailService,
   ) {}
 
   async deliverDocument(
@@ -235,49 +236,19 @@ export class DocumentDeliveryService {
       this.logger.warn(`Failed writing NotificationLog for app ${app.id}: ${logErr.message}`);
     }
 
-    // 4. Send email
-    try {
-      const emailHost = this.configService.get<string>("EMAIL_HOST");
-      const emailUser = this.configService.get<string>("EMAIL_USER");
-      const emailPass = this.configService.get<string>("EMAIL_PASSWORD");
-      const emailPort = parseInt(this.configService.get<string>("EMAIL_PORT") || "587", 10);
-      const emailFrom = this.configService.get<string>("EMAIL_FROM") || "Success MP Online <noreply@successmponline.in>";
-      const isDummy = emailUser?.toLowerCase().includes("dummy");
+    // 4. Send email via centralized MailService
+    const result = await this.mailService.sendMail({
+      to: recipientEmail,
+      subject: emailSubject,
+      text: textContent,
+      html: htmlContent,
+      logRecordId: logRecordId || undefined,
+    });
 
-      const transporter = (emailHost && emailUser && !isDummy)
-        ? nodemailer.createTransport({
-            host: emailHost,
-            port: emailPort,
-            secure: emailPort === 465,
-            auth: { user: emailUser, pass: emailPass },
-          })
-        : nodemailer.createTransport({ jsonTransport: true });
-
-      await transporter.sendMail({
-        from: emailFrom,
-        to: recipientEmail,
-        subject: emailSubject,
-        text: textContent,
-        html: htmlContent,
-      });
-
+    if (result.success) {
       this.logger.log(`[BG] Document delivery email sent to ${recipientEmail} for app ${app.applicationNo}`);
-
-      if (logRecordId) {
-        await this.prisma.notificationLog.update({
-          where: { id: logRecordId },
-          data: { status: NotificationStatus.SENT, sentAt: new Date() },
-        }).catch(() => {});
-      }
-    } catch (err: any) {
-      const emailError = err.message || String(err);
-      this.logger.error(`[BG] Document delivery email failed to ${recipientEmail}: ${emailError}`);
-      if (logRecordId) {
-        await this.prisma.notificationLog.update({
-          where: { id: logRecordId },
-          data: { status: NotificationStatus.FAILED, error: emailError },
-        }).catch(() => {});
-      }
+    } else {
+      this.logger.error(`[BG] Document delivery email failed for app ${app.applicationNo}: ${result.error} { code: "${result.code}" }`);
     }
   }
 }

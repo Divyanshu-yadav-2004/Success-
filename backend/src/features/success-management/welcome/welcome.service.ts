@@ -4,8 +4,9 @@ import { NotificationEngineService } from "../notifications/notification-engine.
 import { NotificationType } from "../notifications/notification.types";
 import { generateWelcomeEmailHtml, generateWelcomeEmailText, safeHttpsUrl } from "../email/welcome-email.template";
 import { ConfigService } from "@nestjs/config";
-import * as nodemailer from "nodemailer";
-import { OFFICIAL_LOGO_BASE64, LOGO_CID } from "../../../mail/templates/assets/logo";
+import { MailService } from "../../../mail/mail.service";
+import { LOGO_CID } from "../../../mail/templates/assets/logo";
+import { OFFICIAL_LOGO_BASE64 } from "../../../mail/templates/assets/logo";
 
 @Injectable()
 export class WelcomeService {
@@ -15,6 +16,7 @@ export class WelcomeService {
     private readonly prisma: PrismaService,
     private readonly notificationEngine: NotificationEngineService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
   ) {}
 
   /**
@@ -69,13 +71,8 @@ export class WelcomeService {
       actionUrl: "/#services",
     });
 
-    // 2. Dispatch Welcome Email
+    // 2. Dispatch Welcome Email via centralized MailService
     try {
-      const emailHost = this.configService.get<string>("EMAIL_HOST");
-      const emailUser = this.configService.get<string>("EMAIL_USER");
-      const emailPass = this.configService.get<string>("EMAIL_PASSWORD");
-      const emailPort = parseInt(this.configService.get<string>("EMAIL_PORT") || "587", 10);
-      const emailFrom = this.configService.get<string>("EMAIL_FROM") || "Success MP Online <noreply@successmponline.in>";
       const supportEmail = this.configService.get<string>("SUPPORT_EMAIL") || "helpSuccessMPonline@gmail.com";
       const supportPhone = this.configService.get<string>("SUPPORT_PHONE") || "7415921990";
 
@@ -102,25 +99,14 @@ export class WelcomeService {
           supportPhone,
         });
 
-        const isDummyUser = emailUser?.toLowerCase().includes("dummy");
-        const transporter = (emailHost && emailUser && !isDummyUser)
-          ? nodemailer.createTransport({
-              host: emailHost,
-              port: emailPort,
-              secure: emailPort === 465,
-              auth: { user: emailUser, pass: emailPass },
-            })
-          : nodemailer.createTransport({ jsonTransport: true });
-
-        const mailOptions: nodemailer.SendMailOptions = {
-          from: emailFrom,
+        const mailOptions: any = {
           to: user.email,
           subject: "Welcome to Success MP Online — Your Registration is Confirmed",
           text,
           html,
         };
 
-        // Keep the fallback logo self-contained when no public HTTPS asset is configured.
+        // Attach logo CID when no public HTTPS asset is configured
         if (!publicLogoUrl) {
           mailOptions.attachments = [{
             filename: "success-mp-online-logo.png",
@@ -131,12 +117,18 @@ export class WelcomeService {
           }];
         }
 
-        await transporter.sendMail(mailOptions);
+        const result = await this.mailService.sendMail(mailOptions);
 
-        this.logger.log(`Welcome email dispatched to ${user.email}`);
+        if (result.success) {
+          this.logger.log(`Welcome email dispatched to ${user.email}`);
+        } else {
+          this.logger.warn(`Welcome email delivery failed for ${user.email}: ${result.error} { code: "${result.code}" }`);
+        }
       }
     } catch (err: any) {
       this.logger.warn(`Failed sending welcome email to user ${userId}: ${err.message}`);
     }
   }
 }
+
+
