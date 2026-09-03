@@ -5,18 +5,21 @@
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build",
+    "build": "prisma generate && nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
-    "start": "wsl -d Ubuntu -u root -- bash -c \"service postgresql start && cd /mnt/c/Users/hp/Downloads/Success/backend && /mnt/c/Program\\ Files/nodejs/node.exe node_modules/@nestjs/cli/bin/nest.js start\"",
-    "start:dev": "wsl -d Ubuntu -u root -- bash -c \"service postgresql start && cd /mnt/c/Users/hp/Downloads/Success/backend && /mnt/c/Program\\ Files/nodejs/node.exe node_modules/@nestjs/cli/bin/nest.js start --watch\"",
-    "start:debug": "wsl -d Ubuntu -u root -- bash -c \"service postgresql start && cd /mnt/c/Users/hp/Downloads/Success/backend && /mnt/c/Program\\ Files/nodejs/node.exe node_modules/@nestjs/cli/bin/nest.js start --debug --watch\"",
-    "start:prod": "wsl -d Ubuntu -u root -- bash -c \"service postgresql start && cd /mnt/c/Users/hp/Downloads/Success/backend && /mnt/c/Program\\ Files/nodejs/node.exe build/src/main\"",
+    "start": "node build/src/main.js",
+    "start:dev": "nest start --watch",
+    "start:debug": "nest start --debug --watch",
+    "start:prod": "node build/src/main.js",
     "typecheck": "tsc --noEmit",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate deploy",
     "prisma:seed": "ts-node prisma/seed.ts",
     "prisma:studio": "prisma studio"
+  },
+  "engines": {
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@google/genai": "^2.15.0",
