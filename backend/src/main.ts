@@ -66,8 +66,8 @@ async function bootstrap() {
     methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   });
 
-  // Global Prefix
-  app.setGlobalPrefix("api/v1");
+  // Global Prefix — root '/' is excluded so the status endpoint works without the prefix
+  app.setGlobalPrefix('api/v1', { exclude: ['/'] });
 
   // Pipes & Filters
   app.useGlobalPipes(

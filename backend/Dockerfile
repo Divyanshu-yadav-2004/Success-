@@ -9,14 +9,10 @@ RUN apk add --no-cache openssl
 COPY package*.json ./
 RUN npm ci
 
-# Copy source
+# Copy source and prisma schema
 COPY . .
 
-# Generate Prisma client (must happen before build)
-ENV DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder_db"
-RUN npx prisma generate
-
-# Build NestJS
+# Build NestJS (npm run build executes prisma generate && nest build)
 RUN npm run build
 
 # ── Production Stage ──────────────────────────────────────────
@@ -32,14 +28,13 @@ ENV NODE_ENV=production
 COPY package*.json ./
 RUN npm ci --omit=dev
 
-# Copy Prisma schema (needed for migrations at runtime)
+# Copy Prisma schema (needed for migrations and client at runtime)
 COPY prisma ./prisma
 
-# Copy built application from builder stage
+# Copy built application and generated prisma artifacts from builder stage
 COPY --from=builder /app/build ./build
-
-# Generate Prisma client in production image
-RUN DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholder_db" npx prisma generate
+COPY --from=builder /app/node_modules/@prisma ./node_modules/@prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 
 # Expose port
 EXPOSE 3000

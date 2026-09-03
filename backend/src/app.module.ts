@@ -1,5 +1,6 @@
 import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
+import { AppController } from "./app.controller";
 import * as path from "path";
 import { PrismaModule } from "./prisma/prisma.module";
 import { HealthModule } from "./health/health.module";
@@ -15,6 +16,7 @@ import { MailModule } from "./mail/mail.module";
 import { SuccessManagementModule } from "./features/success-management/success-management.module";
 
 @Module({
+  controllers: [AppController],
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
