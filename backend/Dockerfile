@@ -44,5 +44,5 @@ RUN DATABASE_URL="postgresql://placeholder:placeholder@localhost:5432/placeholde
 # Expose port
 EXPOSE 3000
 
-# Resolve Railway's database connection string, run prisma db push, then start server
-CMD ["sh", "-c", "if [ -z \"$DATABASE_URL\" ] || echo \"$DATABASE_URL\" | grep -q \"placeholder\"; then if [ -n \"$DATABASE_PRIVATE_URL\" ]; then export DATABASE_URL=\"$DATABASE_PRIVATE_URL\"; elif [ -n \"$DATABASE_PUBLIC_URL\" ]; then export DATABASE_URL=\"$DATABASE_PUBLIC_URL\"; elif [ -n \"$POSTGRES_URL\" ]; then export DATABASE_URL=\"$POSTGRES_URL\"; fi; fi; npx prisma db push && node build/src/main"]
+# Run prisma migrations on start and launch production NestJS server
+CMD ["sh", "-c", "npx prisma migrate deploy && node build/src/main.js"]
