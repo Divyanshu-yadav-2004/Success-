@@ -25,7 +25,31 @@
  */
 function resolveApiBaseUrl(): string {
   const url = import.meta.env.VITE_API_URL as string | undefined;
-  if (url) return url.replace(/\/$/, ""); // strip any trailing slash
+
+  if (url) {
+    const resolved = url.replace(/\/$/, ""); // strip any trailing slash
+
+    // Guard: VITE_API_URL must include /api/v1 (or equivalent path prefix).
+    // A bare domain like https://example.up.railway.app will produce wrong
+    // OAuth redirect URLs such as /auth/google instead of /api/v1/auth/google.
+    if (!resolved.includes("/api/")) {
+      const msg =
+        `[apiClient] VITE_API_URL "${resolved}" does not contain an API path prefix (e.g. /api/v1). ` +
+        `Google OAuth and all API calls will use wrong URLs. ` +
+        `Expected format: https://your-backend.up.railway.app/api/v1`;
+      if (import.meta.env.DEV) {
+        console.error(msg);
+      } else {
+        throw new Error(msg);
+      }
+    }
+
+    if (import.meta.env.DEV) {
+      console.info(`[apiClient] API_BASE_URL resolved to: ${resolved}`);
+    }
+
+    return resolved;
+  }
 
   if (import.meta.env.DEV) {
     console.warn(
