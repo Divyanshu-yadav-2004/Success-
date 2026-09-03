@@ -50,7 +50,7 @@ export interface Application {
   service_type: ServiceType;
   form_data: Record<string, any>;
   documents?: Record<string, any>;
-  status: "pending" | "approved" | "rejected" | "completed";
+  status: "pending" | "processed" | "approved" | "rejected" | "completed";
   admin_notes?: string;
   created_at: string;
   updated_at?: string;
@@ -81,8 +81,10 @@ export interface ApplicationStatusHistory {
 
 export function normalizeApplication(app: any): Application {
   const rawStatus = (app.status || "pending").toString().toLowerCase();
-  const status: "pending" | "approved" | "rejected" | "completed" = rawStatus.includes("completed")
+  const status: "pending" | "processed" | "approved" | "rejected" | "completed" = rawStatus.includes("completed")
     ? "completed"
+    : rawStatus.includes("processed")
+    ? "processed"
     : rawStatus.includes("approved")
     ? "approved"
     : rawStatus.includes("reject")

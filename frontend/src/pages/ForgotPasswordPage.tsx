@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ShieldCheck,
   Mail,
   Loader2,
   AlertCircle,
@@ -73,7 +72,7 @@ export default function ForgotPasswordPage() {
               Government of Madhya Pradesh
             </p>
             <h1 className="text-white font-extrabold text-[22px] leading-tight mt-0.5 drop-shadow-lg">
-              Success MP Online
+              SUCCESS MP ONLINE
             </h1>
             <p className="text-blue-100 text-[11px] font-medium mt-0.5 tracking-wide">
               Citizen Services Portal
@@ -88,15 +87,15 @@ export default function ForgotPasswordPage() {
           </div>
         </div>
 
-        {/* ── Circular logo badge ── */}
+        {/* ── Official logo badge ── */}
         <div className="flex justify-center -mt-9 relative z-10">
-          <div className="w-[72px] h-[72px] rounded-full bg-white ring-4 ring-white shadow-xl flex items-center justify-center">
-            <div className="w-[62px] h-[62px] rounded-full bg-gradient-to-br from-blue-700 to-blue-900 flex flex-col items-center justify-center gap-0.5">
-              <ShieldCheck className="w-7 h-7 text-white" strokeWidth={1.8} />
-              <span className="text-[7px] font-bold text-blue-100 tracking-widest uppercase leading-none">
-                MP ONLINE
-              </span>
-            </div>
+          <div className="w-[76px] h-[76px] rounded-full bg-white ring-4 ring-white shadow-xl flex items-center justify-center">
+            <img
+              src="/logo.png"
+              alt="Success MP Online"
+              className="w-[68px] h-[68px] rounded-full"
+              style={{ objectFit: "contain" }}
+            />
           </div>
         </div>
 

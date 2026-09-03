@@ -1,0 +1,196 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="500" height="500" role="img" aria-label="SUCCESS MP ONLINE — Government Services Digital India Partner">
+  <defs>
+    <!-- Website-matched primary blue fill -->
+    <clipPath id="circleClip">
+      <circle cx="250" cy="250" r="238"/>
+    </clipPath>
+  </defs>
+
+  <!-- ── Transparent outer area (nothing outside the circle) ── -->
+
+  <!-- ── Outermost ring — website navy #102A5C ── -->
+  <circle cx="250" cy="250" r="248" fill="#102A5C"/>
+
+  <!-- ── Outer white ring ── -->
+  <circle cx="250" cy="250" r="238" fill="#FFFFFF"/>
+
+  <!-- ── Inner white ring gap ── -->
+  <circle cx="250" cy="250" r="231" fill="#2450D8"/>
+
+  <!-- ── Thin inner white ring ── -->
+  <circle cx="250" cy="250" r="222" fill="#FFFFFF"/>
+
+  <!-- ── Main circle fill — website primary blue #2450D8 ── -->
+  <circle cx="250" cy="250" r="215" fill="#2450D8"/>
+
+  <!-- ══════════════════════════════════════════════════════════
+       ASHOKA CHAKRA  —  top center
+       Navy ring + 24 spokes + white inner disc
+  ══════════════════════════════════════════════════════════ -->
+  <g transform="translate(250,108)">
+    <!-- Outer navy ring -->
+    <circle cx="0" cy="0" r="38" fill="#102A5C"/>
+    <!-- White ring -->
+    <circle cx="0" cy="0" r="33" fill="#FFFFFF"/>
+    <!-- Navy inner ring -->
+    <circle cx="0" cy="0" r="28" fill="#102A5C"/>
+    <!-- White disc -->
+    <circle cx="0" cy="0" r="22" fill="#FFFFFF"/>
+    <!-- 24 spokes -->
+    <g stroke="#102A5C" stroke-width="2.2" stroke-linecap="round">
+      <line x1="0" y1="-10" x2="0" y2="-20"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(15)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(30)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(45)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(60)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(75)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(90)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(105)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(120)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(135)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(150)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(165)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(180)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(195)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(210)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(225)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(240)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(255)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(270)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(285)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(300)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(315)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(330)"/>
+      <line x1="0" y1="-10" x2="0" y2="-20" transform="rotate(345)"/>
+    </g>
+    <!-- Hub dot -->
+    <circle cx="0" cy="0" r="3.5" fill="#102A5C"/>
+  </g>
+
+  <!-- ══════════════════════════════════════════════════════════
+       BIRD / PHOENIX EMBLEM  —  center
+       Orange wing mass + white centre stripes + green lower
+  ══════════════════════════════════════════════════════════ -->
+
+  <!-- Orange outer wing — left sweeping arc -->
+  <path d="M 250 195
+           C 215 185, 175 195, 158 230
+           C 148 255, 155 275, 165 285
+           C 180 262, 200 248, 220 242
+           C 205 255, 195 270, 195 288
+           C 210 278, 228 265, 245 258
+           L 250 195 Z"
+        fill="#F28C28"/>
+
+  <!-- Orange right wing / bird body -->
+  <path d="M 250 195
+           C 275 185, 305 192, 318 215
+           C 328 232, 322 250, 310 262
+           C 300 250, 285 242, 270 240
+           C 282 252, 290 265, 290 282
+           C 276 270, 258 260, 250 258
+           L 250 195 Z"
+        fill="#F28C28"/>
+
+  <!-- White center stripe — left feathers -->
+  <path d="M 250 210
+           C 232 215, 215 228, 205 248
+           C 215 242, 230 238, 248 238
+           Z"
+        fill="#FFFFFF" opacity="0.92"/>
+
+  <!-- White center stripe — right feathers -->
+  <path d="M 250 210
+           C 268 215, 282 228, 290 248
+           C 280 242, 266 238, 252 238
+           Z"
+        fill="#FFFFFF" opacity="0.92"/>
+
+  <!-- White lower breast stripe -->
+  <path d="M 225 248 C 235 242, 248 240, 250 240 C 252 240, 265 242, 275 248
+           C 265 252, 252 255, 250 256 C 248 255, 235 252, 225 248 Z"
+        fill="#FFFFFF" opacity="0.88"/>
+
+  <!-- Bird head — orange -->
+  <ellipse cx="305" cy="210" rx="14" ry="12" fill="#F28C28"/>
+
+  <!-- Bird beak — small pointed shape -->
+  <path d="M 316 210 L 326 207 L 316 214 Z" fill="#F28C28"/>
+
+  <!-- Bird eye — white dot -->
+  <circle cx="308" cy="207" r="3" fill="#FFFFFF"/>
+  <circle cx="309" cy="207" r="1.5" fill="#102A5C"/>
+
+  <!-- Green lower leaf / flame — left -->
+  <path d="M 195 282
+           C 185 295, 182 310, 188 322
+           C 200 305, 218 295, 240 290
+           C 220 292, 205 288, 195 282 Z"
+        fill="#2E9E44"/>
+
+  <!-- Green lower leaf — right -->
+  <path d="M 305 282
+           C 315 295, 318 310, 312 322
+           C 300 305, 282 295, 260 290
+           C 280 292, 295 288, 305 282 Z"
+        fill="#2E9E44"/>
+
+  <!-- Green stem base -->
+  <path d="M 240 290 C 244 298, 248 305, 250 310 C 252 305, 256 298, 260 290
+           C 255 294, 250 296, 250 296 C 250 296, 245 294, 240 290 Z"
+        fill="#2E9E44"/>
+
+  <!-- ── Orange olive branch — right side ── -->
+  <!-- Branch stem -->
+  <path d="M 308 200 C 320 195, 335 188, 342 175" stroke="#F28C28" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <!-- Leaves -->
+  <ellipse cx="318" cy="196" rx="8" ry="5" fill="#F28C28" transform="rotate(-25,318,196)"/>
+  <ellipse cx="327" cy="189" rx="8" ry="5" fill="#F28C28" transform="rotate(-40,327,189)"/>
+  <ellipse cx="335" cy="181" rx="7" ry="4.5" fill="#F28C28" transform="rotate(-55,335,181)"/>
+  <ellipse cx="341" cy="175" rx="6" ry="4" fill="#FFFFFF" opacity="0.6" transform="rotate(-65,341,175)"/>
+
+  <!-- ── White olive branch — right of orange ── -->
+  <path d="M 318 200 C 330 196, 345 192, 350 180" stroke="#FFFFFF" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.85"/>
+  <ellipse cx="330" cy="196" rx="7" ry="4" fill="#FFFFFF" opacity="0.8" transform="rotate(-30,330,196)"/>
+  <ellipse cx="340" cy="189" rx="6.5" ry="4" fill="#FFFFFF" opacity="0.8" transform="rotate(-45,340,189)"/>
+  <ellipse cx="348" cy="182" rx="6" ry="3.5" fill="#FFFFFF" opacity="0.8" transform="rotate(-60,348,182)"/>
+
+  <!-- ══════════════════════════════════════════════════════════
+       TEXT  —  SUCCESS MP / ONLINE / tagline
+  ══════════════════════════════════════════════════════════ -->
+
+  <!-- "SUCCESS MP" -->
+  <text
+    x="250" y="358"
+    font-family="Arial Black, Arial, Helvetica, sans-serif"
+    font-weight="900"
+    font-size="62"
+    fill="#FFFFFF"
+    text-anchor="middle"
+    letter-spacing="1"
+  >SUCCESS MP</text>
+
+  <!-- "ONLINE" -->
+  <text
+    x="250" y="418"
+    font-family="Arial Black, Arial, Helvetica, sans-serif"
+    font-weight="900"
+    font-size="62"
+    fill="#FFFFFF"
+    text-anchor="middle"
+    letter-spacing="1"
+  >ONLINE</text>
+
+  <!-- Tagline: "GOVERNMENT SERVICES | DIGITAL INDIA PARTNER" -->
+  <text
+    x="250" y="452"
+    font-family="Arial, Helvetica, sans-serif"
+    font-weight="600"
+    font-size="16.5"
+    fill="#FFFFFF"
+    text-anchor="middle"
+    letter-spacing="0.5"
+    opacity="0.92"
+  >GOVERNMENT SERVICES | DIGITAL INDIA PARTNER</text>
+
+</svg>

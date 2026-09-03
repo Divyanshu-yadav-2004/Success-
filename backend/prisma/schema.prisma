@@ -8,6 +8,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum RoleName {
@@ -25,6 +26,7 @@ enum ApplicationStatus {
   SUBMITTED
   UNDER_REVIEW
   DOCUMENT_VERIFICATION
+  PROCESSED
   APPROVED
   REJECTED
   COMPLETED
@@ -118,6 +120,7 @@ model User {
   notifications       Notification[]
   welcomeNotificationSentAt DateTime? @map("welcome_notification_sent_at")
 
+  @@index([roleId])
   @@map("users")
 }
 
@@ -210,7 +213,9 @@ model Application {
   notifications  Notification[]
 
   @@index([userId])
+  @@index([serviceId])
   @@index([status])
+  @@index([paymentStatus])
   @@index([createdAt(sort: Desc)])
   @@map("applications")
 }
@@ -227,6 +232,7 @@ model ApplicationStatusHistory {
   application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   changedBy     User?             @relation("StatusChangedBy", fields: [changedById], references: [id])
 
+  @@index([applicationId])
   @@map("application_status_history")
 }
 
@@ -254,6 +260,8 @@ model ApplicationDocument {
 
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
+  @@index([applicationId])
+  @@index([documentType])
   @@map("application_documents")
 }
 
@@ -272,6 +280,7 @@ model Payment {
   application   Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
   events        PaymentEvent[]
 
+  @@index([applicationId])
   @@map("payments")
 }
 
@@ -296,6 +305,7 @@ model Receipt {
 
   application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
 
+  @@index([applicationId])
   @@map("receipts")
 }
 
@@ -315,6 +325,7 @@ model Notification {
   logs          NotificationLog[]
 
   @@index([userId])
+  @@index([createdAt(sort: Desc)])
   @@map("notifications")
 }
 
@@ -334,6 +345,9 @@ model NotificationLog {
 
   notification   Notification?       @relation(fields: [notificationId], references: [id])
 
+  @@index([applicationId])
+  @@index([status])
+  @@index([createdAt(sort: Desc)])
   @@map("notification_logs")
 }
 

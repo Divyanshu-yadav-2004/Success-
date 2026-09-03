@@ -18,11 +18,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: { sub: string; email: string }) {
+    // This runs for every protected endpoint. Keep it to the authorization
+    // fields required by guards/controllers; profile data is loaded only by
+    // /auth/me instead of joining it into every API request.
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
-      include: {
-        role: true,
-        profile: true,
+      select: {
+        id: true,
+        email: true,
+        isActive: true,
+        role: { select: { name: true } },
       },
     });
 

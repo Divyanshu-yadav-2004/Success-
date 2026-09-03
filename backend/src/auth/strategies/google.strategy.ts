@@ -34,25 +34,23 @@ export class GoogleStrategy extends PassportStrategy(Strategy, "google") {
     _accessToken: string,
     _refreshToken: string,
     profile: any,
-    done: VerifyCallback,
   ): Promise<any> {
     const { id, name, emails, photos } = profile;
 
     const email = emails?.[0]?.value;
     const fullName =
-      `${name?.givenName || ""} ${name?.familyName || ""}`.trim() ||
-      email?.split("@")[0] ||
-      "Google User";
+      `${name?.givenName || ""}` +
+      (name?.familyName ? ` ${name?.familyName}` : "");
+    const safeFullName =
+      fullName.trim() || email?.split("@")[0] || "Google User";
 
     this.logger.log(`Google OAuth: validated profile for ${email}`);
 
-    const googleUser = {
+    return {
       googleId: id,
       email,
-      fullName,
+      fullName: safeFullName,
       picture: photos?.[0]?.value,
     };
-
-    done(null, googleUser);
   }
 }

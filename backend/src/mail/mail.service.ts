@@ -12,6 +12,10 @@ import {
   generatePasswordResetEmailText,
   type PasswordResetEmailOptions,
 } from "./templates/password-reset-email.template";
+import {
+  generateRegistrationEmailHtml,
+  generateRegistrationEmailText,
+} from "./templates/registration-email.template";
 
 export interface SendConfirmationEmailOptions {
   to: string;
@@ -278,6 +282,115 @@ export class MailService {
           where: { id: logRecordId },
           data: { status: NotificationStatus.FAILED, error: errorMessage },
         }).catch(() => {});
+      }
+
+      return { success: false, error: errorMessage };
+    }
+  }
+
+  /**
+   * Sends a welcome/registration confirmation email when a new user registers.
+   * Displays the user's name, mobile, email, and IST registration date/time.
+   */
+  async sendRegistrationWelcomeEmail(options: {
+    to: string;
+    userName: string;
+    mobileNumber: string;
+    registrationDate: Date;
+  }): Promise<{ success: boolean; error?: string }> {
+    const { to, userName, mobileNumber, registrationDate } = options;
+
+    const formattedDate =
+      new Date(registrationDate).toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        dateStyle: "medium",
+        timeStyle: "short",
+      }) + " IST";
+
+    const portalUrl = this.frontendUrl;
+    const supportEmail = "helpSuccessMPonline@gmail.com";
+    const supportPhone = "7415921990";
+
+    const htmlContent = generateRegistrationEmailHtml({
+      userName,
+      mobileNumber,
+      email: to,
+      registrationDate: formattedDate,
+      portalUrl,
+      supportEmail,
+      supportPhone,
+    });
+
+    const textContent = generateRegistrationEmailText({
+      userName,
+      mobileNumber,
+      email: to,
+      registrationDate: formattedDate,
+      portalUrl,
+      supportEmail,
+      supportPhone,
+    });
+
+    const subject = `Welcome to Success MP Online — Your Registration is Confirmed`;
+
+    let logRecordId: string | null = null;
+    try {
+      const logRecord = await this.prisma.notificationLog.create({
+        data: {
+          channel: NotificationChannel.EMAIL,
+          recipient: to,
+          subject,
+          content: textContent,
+          status: NotificationStatus.PENDING,
+        },
+      });
+      logRecordId = logRecord.id;
+    } catch (dbErr: any) {
+      this.logger.warn(`Could not create NotificationLog entry: ${dbErr.message}`);
+    }
+
+    try {
+      if (!to || !to.includes("@")) {
+        throw new Error(`Invalid email recipient address: "${to}"`);
+      }
+
+      if (this.transporter) {
+        await this.transporter.sendMail({
+          from: this.fromAddress,
+          to,
+          subject,
+          text: textContent,
+          html: htmlContent,
+        });
+      }
+
+      this.logger.log(
+        `[MailService] Registration welcome email dispatched to ${to} for user: ${userName}`,
+      );
+
+      if (logRecordId) {
+        await this.prisma.notificationLog
+          .update({
+            where: { id: logRecordId },
+            data: { status: NotificationStatus.SENT, sentAt: new Date() },
+          })
+          .catch(() => {});
+      }
+
+      return { success: true };
+    } catch (err: any) {
+      const errorMessage = err?.message || String(err);
+      this.logger.error(
+        `[MailService] Failed to send registration welcome email to ${to}: ${errorMessage}`,
+      );
+
+      if (logRecordId) {
+        await this.prisma.notificationLog
+          .update({
+            where: { id: logRecordId },
+            data: { status: NotificationStatus.FAILED, error: errorMessage },
+          })
+          .catch(() => {});
       }
 
       return { success: false, error: errorMessage };

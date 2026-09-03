@@ -1,3 +1,5 @@
+import { getOfficialEmailHeaderHtml } from "../../../mail/templates/assets/logo";
+
 export interface AnnouncementEmailParams {
   customerName: string;
   title: string;
@@ -5,6 +7,7 @@ export interface AnnouncementEmailParams {
   actionUrl?: string;
   supportPhone?: string;
   supportEmail?: string;
+  portalUrl?: string;
 }
 
 export function generateAnnouncementEmailHtml(params: AnnouncementEmailParams): string {
@@ -15,7 +18,13 @@ export function generateAnnouncementEmailHtml(params: AnnouncementEmailParams): 
     actionUrl,
     supportPhone = "7415921990",
     supportEmail = "support@successmponline.in",
+    portalUrl,
   } = params;
+
+  const headerHtml = getOfficialEmailHeaderHtml({
+    portalUrl: portalUrl || actionUrl,
+    badgeTitle: "Official Announcement",
+  });
 
   return `
 <!DOCTYPE html>
@@ -26,10 +35,6 @@ export function generateAnnouncementEmailHtml(params: AnnouncementEmailParams): 
   <style>
     body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; color: #1e293b; margin: 0; padding: 0; }
     .container { max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.05); border: 1px solid #e2e8f0; }
-    .header { background: linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding: 32px 24px; text-align: center; color: #ffffff; }
-    .logo-badge { display: inline-flex; align-items: center; justify-content: center; width: 48px; height: 48px; background: rgba(255,255,255,0.15); border-radius: 12px; margin-bottom: 12px; font-size: 24px; }
-    .header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.5px; }
-    .header p { margin: 6px 0 0 0; color: #93c5fd; font-size: 13px; }
     .content { padding: 32px 24px; }
     .greeting { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 16px; }
     .announcement-title { font-size: 20px; font-weight: 800; color: #1e3a8a; margin-bottom: 12px; }
@@ -41,11 +46,7 @@ export function generateAnnouncementEmailHtml(params: AnnouncementEmailParams): 
 </head>
 <body>
   <div class="container">
-    <div class="header">
-      <div class="logo-badge">🛡️</div>
-      <h1>Success MP Online</h1>
-      <p>Government & Citizen Digital Services Portal</p>
-    </div>
+    ${headerHtml}
     <div class="content">
       <div class="greeting">Hello ${customerName},</div>
       <div class="announcement-title">${title}</div>

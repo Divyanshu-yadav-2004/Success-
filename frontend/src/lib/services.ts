@@ -20,7 +20,8 @@ export const SERVICES: ServiceConfig[] = [
       { name: "address", label: "Residential Address", type: "textarea", placeholder: "House no, Street, City, State, PIN", required: true, fullWidth: true },
     ],
     documents: [
-      { name: "aadhaar_card", label: "Aadhaar Card", description: "Front + back of your Aadhaar card", required: true },
+      { name: "aadhaar_front", label: "Aadhaar Front", description: "Front side of your Aadhaar card", required: true },
+      { name: "aadhaar_back", label: "Aadhaar Back", description: "Back side of your Aadhaar card", required: true },
       { name: "pan_proof", label: "Existing PAN (if correction)", description: "Only required for correction applications", required: false },
       { name: "address_proof", label: "Address Proof", description: "Utility bill, voter ID, or passport", required: true },
       { name: "photo", label: "Passport-size Photo", description: "Recent colour photograph", required: true },
@@ -45,7 +46,8 @@ export const SERVICES: ServiceConfig[] = [
       { name: "gstn", label: "GSTIN (if applicable)", type: "text", placeholder: "23ABCDE1234F1Z5", required: false },
     ],
     documents: [
-      { name: "owner_id", label: "Owner ID Proof", description: "Aadhaar, PAN, or voter ID of the owner", required: true },
+      { name: "aadhaar_front", label: "Aadhaar Front", description: "Front side of owner's Aadhaar card", required: true },
+      { name: "aadhaar_back", label: "Aadhaar Back", description: "Back side of owner's Aadhaar card", required: true },
       { name: "address_proof", label: "Shop Address Proof", description: "Electricity bill, property tax receipt, or rent agreement", required: true },
       { name: "rent_agreement", label: "Rent Agreement (if rented)", description: "Only required if premises are rented", required: false },
       { name: "photo", label: "Owner's Passport Photo", description: "Recent colour photograph of the owner", required: true },
@@ -74,7 +76,8 @@ export const SERVICES: ServiceConfig[] = [
       { name: "aadhaar", label: "Aadhaar of Applicant", type: "text", placeholder: "XXXX XXXX XXXX", required: true },
     ],
     documents: [
-      { name: "aadhaar_card", label: "Aadhaar Card", description: "Of the proprietor / partner / director", required: true },
+      { name: "aadhaar_front", label: "Aadhaar Front", description: "Front side of your Aadhaar card", required: true },
+      { name: "aadhaar_back", label: "Aadhaar Back", description: "Back side of your Aadhaar card", required: true },
       { name: "pan_card", label: "PAN Card", description: "Of the proprietor / partner / organisation", required: true },
       { name: "bank_proof", label: "Bank Proof", description: "Cancelled cheque or bank statement", required: true },
       { name: "business_proof", label: "Business Address Proof", description: "Utility bill or rental agreement for business premises", required: true },

@@ -27,4 +27,16 @@ export class ReceiptsController {
 
     res.end(pdfBuffer);
   }
+
+  @Get("application/:applicationId")
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Generate & download PDF receipt for application (alias route)" })
+  async downloadReceiptAlias(
+    @Param("applicationId") applicationId: string,
+    @Res() res: Response,
+  ) {
+    return this.downloadReceipt(applicationId, res);
+  }
 }
+

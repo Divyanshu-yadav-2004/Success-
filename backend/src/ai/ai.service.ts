@@ -93,7 +93,7 @@ const TOOL_DECLARATIONS = [
         status: {
           type: Type.STRING,
           description:
-            "New status: DRAFT, DOCUMENTS_PENDING, PAYMENT_PENDING, SUBMITTED, UNDER_REVIEW, DOCUMENT_VERIFICATION, APPROVED, REJECTED, COMPLETED, CANCELLED",
+            "New status: DRAFT, DOCUMENTS_PENDING, PAYMENT_PENDING, SUBMITTED, UNDER_REVIEW, DOCUMENT_VERIFICATION, PROCESSED, APPROVED, REJECTED, COMPLETED, CANCELLED",
         },
         notes: {
           type: Type.STRING,
@@ -293,10 +293,27 @@ Is Admin/Staff: ${isAdmin}`;
         toolCalls: [],
       };
     } catch (err: any) {
-      this.logger.warn("Gemini API execution failed, falling back to Smart Assistant:", err?.message || err);
+      const msg = String(err?.message || err || "");
+      const isQuotaError =
+        msg.includes("RESOURCE_EXHAUSTED") ||
+        msg.includes("Quota exceeded") ||
+        msg.includes("429") ||
+        msg.includes("limit: 0");
+
+      if (isQuotaError) {
+        this.logger.warn(
+          `[AiService] Gemini API quota exhausted (429 Resource Exhausted) - switching immediately to Smart Assistant local fallback.`,
+        );
+      } else {
+        this.logger.warn(
+          `[AiService] Gemini API execution failed: ${msg.slice(0, 120)} - switching to Smart Assistant local fallback.`,
+        );
+      }
+
       return this.processRuleBasedFallback(user, userMessage);
     }
   }
+
 
   // ─── Rule-based fallback (no API key configured) ───────────────────────────
   private async processRuleBasedFallback(user: any, userMessage: string) {

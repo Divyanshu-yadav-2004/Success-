@@ -2,17 +2,25 @@
 // Password Reset Email Template  — Success MP Online
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { getOfficialEmailHeaderHtml } from "./assets/logo";
+
 export interface PasswordResetEmailOptions {
   userName: string;
   resetUrl: string;
   supportEmail: string;
   supportPhone: string;
+  portalUrl?: string;
 }
 
 export function generatePasswordResetEmailHtml(
   opts: PasswordResetEmailOptions,
 ): string {
-  const { userName, resetUrl, supportEmail, supportPhone } = opts;
+  const { userName, resetUrl, supportEmail, supportPhone, portalUrl } = opts;
+
+  const headerHtml = getOfficialEmailHeaderHtml({
+    portalUrl,
+    badgeTitle: "Password Reset Request",
+  });
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -24,16 +32,6 @@ export function generatePasswordResetEmailHtml(
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background-color: #f0f4f9; font-family: 'Segoe UI', Arial, sans-serif; color: #1e293b; }
     .wrapper { max-width: 600px; margin: 32px auto; background: #ffffff; border-radius: 16px; overflow: hidden; box-shadow: 0 4px 24px rgba(30,64,175,0.10); }
-    .header { background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%); padding: 0; }
-    .tricolor { display: flex; height: 4px; }
-    .tricolor-saffron { flex: 1; background: #FF9933; }
-    .tricolor-white  { flex: 1; background: #ffffff; }
-    .tricolor-green  { flex: 1; background: #138808; }
-    .header-content { padding: 32px 40px 28px; }
-    .portal-label { font-size: 11px; font-weight: 700; letter-spacing: 0.18em; color: #bfdbfe; text-transform: uppercase; margin-bottom: 4px; }
-    .portal-name  { font-size: 24px; font-weight: 800; color: #ffffff; margin-bottom: 2px; }
-    .portal-sub   { font-size: 12px; color: #93c5fd; }
-    .badge { display: inline-block; margin-top: 12px; background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.25); border-radius: 20px; padding: 4px 14px; font-size: 12px; color: #e0f2fe; font-weight: 600; }
     .body { padding: 40px 40px 32px; }
     .greeting { font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 16px; }
     .message { font-size: 15px; color: #475569; line-height: 1.7; margin-bottom: 32px; }
@@ -54,20 +52,7 @@ export function generatePasswordResetEmailHtml(
 </head>
 <body>
   <div class="wrapper">
-    <!-- Header -->
-    <div class="header">
-      <div class="tricolor">
-        <div class="tricolor-saffron"></div>
-        <div class="tricolor-white"></div>
-        <div class="tricolor-green"></div>
-      </div>
-      <div class="header-content">
-        <p class="portal-label">Government of Madhya Pradesh</p>
-        <p class="portal-name">Success MP Online</p>
-        <p class="portal-sub">Secure Digital Citizen Services</p>
-        <span class="badge">🔐 Password Reset Request</span>
-      </div>
-    </div>
+    ${headerHtml}
 
     <!-- Body -->
     <div class="body">

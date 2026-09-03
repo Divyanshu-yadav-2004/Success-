@@ -2,6 +2,30 @@ import { jsPDF } from "jspdf";
 import type { Application } from "./types";
 import { SERVICE_MAP } from "./services";
 
+// ── Load the official logo as a data-URL for embedding in PDFs ──────────────
+// Fetches /logo.png once and caches it.  Falls back gracefully if unavailable.
+let _cachedLogoDataUrl: string | null = null;
+
+async function getLogoDataUrl(): Promise<string | null> {
+  if (_cachedLogoDataUrl !== null) return _cachedLogoDataUrl;
+  try {
+    const res = await fetch("/logo.png");
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        _cachedLogoDataUrl = reader.result as string;
+        resolve(_cachedLogoDataUrl);
+      };
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function formatApplicationId(appOrId: any): string {
   if (!appOrId) return "SUC-00000000";
   if (typeof appOrId === "object") {
@@ -23,19 +47,32 @@ export function generateReceiptPdf(app: Application): jsPDF {
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
 
-  // Header band
-  doc.setFillColor(13, 71, 161);
-  doc.rect(0, 0, pageWidth, 90, "F");
+  // ── Header band ───────────────────────────────────────────────────────────
+  doc.setFillColor(13, 71, 161); // #0d47a1 navy
+  doc.rect(0, 0, pageWidth, 95, "F");
+
+  // Logo (if already cached synchronously — sync path only in PDF generation)
+  if (_cachedLogoDataUrl) {
+    try {
+      doc.addImage(_cachedLogoDataUrl, "PNG", margin, 10, 72, 72);
+    } catch {
+      // logo failed — skip silently
+    }
+  }
+
+  // Brand name + tagline in header
   doc.setTextColor(255, 255, 255);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(20);
-  doc.text("Success MP Online", margin, 38);
+  doc.text("SUCCESS MP ONLINE", margin + ((_cachedLogoDataUrl) ? 80 : 0), 38);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
-  doc.text("Government Services Portal - Payment Receipt", margin, 60);
+  doc.text("Government Services Portal — Payment Receipt", margin + ((_cachedLogoDataUrl) ? 80 : 0), 58);
+  doc.setFontSize(9);
+  doc.text("Government of Madhya Pradesh", margin + ((_cachedLogoDataUrl) ? 80 : 0), 74);
 
   // Receipt title
-  y = 120;
+  y = 124;
   doc.setTextColor(33, 33, 33);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
@@ -191,7 +228,9 @@ export function generateReceiptPdf(app: Application): jsPDF {
   return doc;
 }
 
-export function downloadReceipt(app: Application) {
+export async function downloadReceipt(app: Application) {
+  // Pre-fetch logo so it is available synchronously inside generateReceiptPdf
+  await getLogoDataUrl();
   const doc = generateReceiptPdf(app);
   doc.save(`${formatApplicationId(app.id)}.pdf`);
 }

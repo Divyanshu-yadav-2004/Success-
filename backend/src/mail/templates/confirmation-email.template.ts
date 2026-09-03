@@ -1,3 +1,5 @@
+import { getOfficialEmailHeaderHtml } from "./assets/logo";
+
 export interface ConfirmationEmailParams {
   applicantName: string;
   applicationNo: string;
@@ -7,6 +9,7 @@ export interface ConfirmationEmailParams {
   trackUrl: string;
   supportPhone?: string;
   supportEmail?: string;
+  portalUrl?: string;
 }
 
 export function generateConfirmationEmailHtml(params: ConfirmationEmailParams): string {
@@ -19,7 +22,13 @@ export function generateConfirmationEmailHtml(params: ConfirmationEmailParams): 
     trackUrl,
     supportPhone = "7415921990",
     supportEmail = "support@successmponline.in",
+    portalUrl,
   } = params;
+
+  const headerHtml = getOfficialEmailHeaderHtml({
+    portalUrl,
+    badgeTitle: "Application Confirmation",
+  });
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -50,226 +59,12 @@ export function generateConfirmationEmailHtml(params: ConfirmationEmailParams): 
       box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
       border: 1px solid #e2e8f0;
     }
-    .header {
-      background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
-      padding: 32px 36px 28px;
-      text-align: left;
-      position: relative;
-    }
-    .header-accent {
-      height: 4px;
-      background: linear-gradient(90deg, #f59e0b 0%, #3b82f6 50%, #10b981 100%);
-    }
-    .brand-badge {
-      display: inline-block;
-      background-color: rgba(255, 255, 255, 0.12);
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      border-radius: 20px;
-      padding: 4px 12px;
-      font-size: 11px;
-      font-weight: 600;
-      color: #93c5fd;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
-    .brand-title {
-      font-size: 24px;
-      font-weight: 800;
-      color: #ffffff;
-      margin: 0;
-      letter-spacing: -0.5px;
-    }
-    .brand-subtitle {
-      font-size: 13px;
-      color: #cbd5e1;
-      margin-top: 4px;
-    }
-    .content {
-      padding: 36px;
-    }
-    .status-banner {
-      background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
-      border: 1px solid #a7f3d0;
-      border-radius: 12px;
-      padding: 16px 20px;
-      display: flex;
-      align-items: center;
-      margin-bottom: 28px;
-    }
-    .status-icon-circle {
-      width: 42px;
-      height: 42px;
-      border-radius: 50%;
-      background-color: #10b981;
-      color: #ffffff;
-      font-size: 22px;
-      line-height: 42px;
-      text-align: center;
-      font-weight: bold;
-      margin-right: 16px;
-      flex-shrink: 0;
-    }
-    .status-title {
-      font-size: 16px;
-      font-weight: 700;
-      color: #065f46;
-      margin: 0;
-    }
-    .status-sub {
-      font-size: 13px;
-      color: #047857;
-      margin-top: 2px;
-    }
-    .greeting {
-      font-size: 16px;
-      font-weight: 600;
-      color: #0f172a;
-      margin-bottom: 12px;
-    }
-    .body-text {
-      font-size: 14px;
-      line-height: 1.6;
-      color: #475569;
-      margin-bottom: 24px;
-    }
-    .details-card {
-      background-color: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      padding: 24px;
-      margin-bottom: 28px;
-    }
-    .details-title {
-      font-size: 12px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: #64748b;
-      margin-bottom: 16px;
-      border-bottom: 1px solid #e2e8f0;
-      padding-bottom: 8px;
-    }
-    .detail-row {
-      padding: 8px 0;
-      border-bottom: 1px dashed #e2e8f0;
-    }
-    .detail-label {
-      font-size: 13px;
-      color: #64748b;
-      font-weight: 500;
-    }
-    .detail-value {
-      font-size: 14px;
-      color: #0f172a;
-      font-weight: 600;
-      text-align: right;
-    }
-    .app-id-badge {
-      display: inline-block;
-      background-color: #eff6ff;
-      border: 1.5px solid #3b82f6;
-      color: #1d4ed8;
-      font-family: 'Courier New', Courier, monospace;
-      font-size: 16px;
-      font-weight: 700;
-      padding: 4px 12px;
-      border-radius: 8px;
-      letter-spacing: 1px;
-    }
-    .status-pill {
-      display: inline-block;
-      background-color: #dcfce7;
-      color: #15803d;
-      font-size: 12px;
-      font-weight: 700;
-      padding: 3px 10px;
-      border-radius: 20px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-    }
-    .cta-container {
-      text-align: center;
-      margin: 32px 0;
-    }
-    .cta-button {
-      display: inline-block;
-      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-      color: #ffffff !important;
-      font-size: 15px;
-      font-weight: 700;
-      text-decoration: none;
-      padding: 14px 32px;
-      border-radius: 10px;
-      box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);
-    }
-    .security-notice {
-      background-color: #fffbe6;
-      border: 1px solid #ffe58f;
-      border-left: 4px solid #f59e0b;
-      border-radius: 8px;
-      padding: 16px;
-      margin-bottom: 28px;
-    }
-    .security-notice-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: #b45309;
-      margin: 0 0 4px;
-    }
-    .security-notice-text {
-      font-size: 12px;
-      line-height: 1.5;
-      color: #78350f;
-      margin: 0;
-    }
-    .support-card {
-      background-color: #f1f5f9;
-      border-radius: 10px;
-      padding: 18px 20px;
-      margin-bottom: 24px;
-    }
-    .support-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: #334155;
-      margin: 0 0 8px;
-    }
-    .support-item {
-      font-size: 13px;
-      color: #475569;
-      margin: 4px 0;
-    }
-    .footer {
-      background-color: #0f172a;
-      padding: 28px 36px;
-      text-align: center;
-      color: #94a3b8;
-      font-size: 12px;
-      line-height: 1.6;
-    }
-    .footer-disclaimer {
-      font-size: 11px;
-      color: #64748b;
-      margin-bottom: 16px;
-      font-style: italic;
-    }
-    .footer-copy {
-      margin-top: 16px;
-      font-size: 11px;
-      color: #475569;
-    }
   </style>
 </head>
 <body>
   <div class="wrapper">
     <div class="container">
-      <div class="header-accent"></div>
-      <div class="header">
-        <div class="brand-badge">Official Confirmation</div>
-        <h1 class="brand-title">Success MP Online</h1>
-        <div class="brand-subtitle">Citizen Services Facilitation Portal — Madhya Pradesh</div>
-      </div>
+      ${headerHtml}
 
       <div class="content">
         <div class="status-banner">

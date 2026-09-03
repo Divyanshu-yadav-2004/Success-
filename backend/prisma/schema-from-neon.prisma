@@ -1,0 +1,274 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Application {
+  id                                     String                @id
+  applicationNumber                      String                @unique
+  serviceId                              String
+  applicantId                            String
+  assignedStaffId                        String?
+  status                                 ApplicationStatus     @default(DRAFT)
+  formData                               Json
+  remarks                                String?
+  submittedAt                            DateTime?
+  completedAt                            DateTime?
+  createdAt                              DateTime              @default(now())
+  updatedAt                              DateTime
+  User_Application_applicantIdToUser     User                  @relation("Application_applicantIdToUser", fields: [applicantId], references: [id], onDelete: Cascade)
+  User_Application_assignedStaffIdToUser User?                 @relation("Application_assignedStaffIdToUser", fields: [assignedStaffId], references: [id])
+  GovernmentService                      GovernmentService     @relation(fields: [serviceId], references: [id])
+  ApplicationDocument                    ApplicationDocument[]
+  ApplicationHistory                     ApplicationHistory[]
+  Payment                                Payment?
+
+  @@index([applicantId])
+  @@index([applicationNumber])
+  @@index([assignedStaffId])
+  @@index([status])
+}
+
+model ApplicationDocument {
+  id            String      @id
+  applicationId String
+  documentId    String
+  createdAt     DateTime    @default(now())
+  Application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  Document      Document    @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([applicationId, documentId])
+}
+
+model ApplicationHistory {
+  id            String            @id
+  applicationId String
+  fromStatus    ApplicationStatus
+  toStatus      ApplicationStatus
+  changedById   String
+  comment       String?
+  createdAt     DateTime          @default(now())
+  Application   Application       @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  User          User              @relation(fields: [changedById], references: [id])
+
+  @@index([applicationId])
+}
+
+model AuditLog {
+  id        String   @id
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  details   Json?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  User      User?    @relation(fields: [userId], references: [id])
+
+  @@index([action])
+  @@index([entity])
+  @@index([userId])
+}
+
+model Document {
+  id                               String                @id
+  title                            String
+  type                             DocumentType          @default(OTHER)
+  fileKey                          String                @unique
+  fileUrl                          String
+  mimeType                         String
+  fileSize                         Int
+  status                           DocumentStatus        @default(PENDING)
+  verificationNotes                String?
+  userId                           String
+  verifiedById                     String?
+  createdAt                        DateTime              @default(now())
+  updatedAt                        DateTime
+  ApplicationDocument              ApplicationDocument[]
+  User_Document_userIdToUser       User                  @relation("Document_userIdToUser", fields: [userId], references: [id], onDelete: Cascade)
+  User_Document_verifiedByIdToUser User?                 @relation("Document_verifiedByIdToUser", fields: [verifiedById], references: [id])
+
+  @@index([status])
+  @@index([userId])
+}
+
+model GovernmentService {
+  id                String        @id
+  title             String
+  code              String        @unique
+  description       String
+  category          String
+  feeAmount         Float         @default(0.0)
+  processingDays    Int           @default(7)
+  requiredDocuments Json
+  isActive          Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime
+  Application       Application[]
+
+  @@index([code])
+  @@index([isActive])
+}
+
+model Notification {
+  id        String              @id
+  userId    String
+  title     String
+  message   String
+  channel   NotificationChannel @default(IN_APP)
+  isRead    Boolean             @default(false)
+  metadata  Json?
+  createdAt DateTime            @default(now())
+  User      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([isRead])
+  @@index([userId])
+}
+
+model Payment {
+  id              String        @id
+  applicationId   String        @unique
+  amount          Float
+  currency        String        @default("INR")
+  status          PaymentStatus @default(PENDING)
+  paymentMethod   PaymentMethod @default(UPI)
+  transactionId   String        @unique
+  gatewayResponse Json?
+  paidAt          DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime
+  Application     Application   @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@index([transactionId])
+}
+
+model RefreshToken {
+  id        String   @id
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  isRevoked Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([userId])
+}
+
+model Role {
+  id          String   @id
+  name        UserRole @unique
+  description String?
+  permissions Json
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime
+}
+
+model Session {
+  id        String   @id
+  userId    String
+  ipAddress String?
+  userAgent String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  User      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model User {
+  id                                            String               @id
+  email                                         String               @unique
+  passwordHash                                  String
+  firstName                                     String
+  lastName                                      String
+  phone                                         String?              @unique
+  nationalId                                    String?              @unique
+  role                                          UserRole             @default(USER)
+  status                                        UserStatus           @default(ACTIVE)
+  isEmailVerified                               Boolean              @default(false)
+  isPhoneVerified                               Boolean              @default(false)
+  avatarUrl                                     String?
+  createdAt                                     DateTime             @default(now())
+  updatedAt                                     DateTime
+  Application_Application_applicantIdToUser     Application[]        @relation("Application_applicantIdToUser")
+  Application_Application_assignedStaffIdToUser Application[]        @relation("Application_assignedStaffIdToUser")
+  ApplicationHistory                            ApplicationHistory[]
+  AuditLog                                      AuditLog[]
+  Document_Document_userIdToUser                Document[]           @relation("Document_userIdToUser")
+  Document_Document_verifiedByIdToUser          Document[]           @relation("Document_verifiedByIdToUser")
+  Notification                                  Notification[]
+  RefreshToken                                  RefreshToken[]
+  Session                                       Session[]
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+}
+
+enum ApplicationStatus {
+  DRAFT
+  SUBMITTED
+  IN_REVIEW
+  ADDITIONAL_INFO_REQUIRED
+  APPROVED
+  REJECTED
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  SMS
+}
+
+enum DocumentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+enum DocumentType {
+  IDENTITY_PROOF
+  ADDRESS_PROOF
+  INCOME_CERTIFICATE
+  CASTE_CERTIFICATE
+  EDUCATIONAL_MARKSHEET
+  TAX_RETURNS
+  BUSINESS_LICENSE
+  OTHER
+}
+
+enum PaymentMethod {
+  NET_BANKING
+  UPI
+  CREDIT_CARD
+  DEBIT_CARD
+  WALLET
+}
+
+enum UserRole {
+  ADMIN
+  STAFF
+  USER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}

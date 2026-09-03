@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ShieldCheck, LifeBuoy, LogOut, User, Check, X, ShieldAlert } from "lucide-react";
+import { LifeBuoy, LogOut, User, Check, X, Globe, Menu } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { BrandLogo, NotificationBell } from "@/features/success-management";
+import { useLanguage } from "@/context/LanguageContext";
+import LanguageToggle from "@/components/LanguageToggle";
 
 export default function Navbar() {
   const { user, profile, isAdmin, signOut, updateProfile } = useAuth();
+  const { language, setLanguage, t } = useLanguage();
   const [showModal, setShowModal] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name || "");
   const [phone, setPhone] = useState(profile?.phone || "");
   const [address, setAddress] = useState(profile?.address || "");
@@ -35,59 +38,175 @@ export default function Navbar() {
     });
     setSaving(false);
     if (error) {
-      setMsg(`Error: ${error}`);
+      setMsg(`${t.navbar.error}: ${error}`);
     } else {
-      setMsg("Profile updated successfully!");
+      setMsg(t.navbar.profileUpdated);
       setTimeout(() => setShowModal(false), 1200);
     }
   };
 
   return (
     <>
-      <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-lg border-b border-slate-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link to="/">
-            <BrandLogo isAdmin={isAdmin} />
+      {/* ── Professional government-portal header ───────────────────────────── */}
+      <header className="sticky top-0 z-30 bg-white border-b border-slate-200 shadow-sm">
+        <div
+          className="mx-auto flex items-center justify-between"
+          style={{ maxWidth: 1280, height: 72, paddingLeft: 20, paddingRight: 20 }}
+        >
+
+          {/* ── LEFT: Logo + brand text ─────────────────────────────────────── */}
+          <Link to="/" className="flex items-center gap-3 shrink-0 min-w-0" style={{ textDecoration: "none" }}>
+            {/* Official circular logo — 40×40 px, never distorted */}
+            <img
+              src="/logo.png"
+              alt="SUCCESS MP ONLINE"
+              style={{ width: 40, height: 40, borderRadius: "50%", objectFit: "contain", flexShrink: 0, display: "block" }}
+              draggable={false}
+            />
+
+            {/* Two-line brand block */}
+            <div className="leading-none min-w-0">
+              <p
+                className="font-extrabold tracking-tight text-[#0f2d5c] whitespace-nowrap"
+                style={{ fontSize: 16, lineHeight: "1.2" }}
+              >
+                SUCCESS MP ONLINE
+              </p>
+              <p
+                className="hidden sm:block text-slate-400 font-medium whitespace-nowrap mt-0.5"
+                style={{ fontSize: 11, lineHeight: "1.3" }}
+              >
+                Government Services Portal
+              </p>
+            </div>
           </Link>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            {user && <NotificationBell />}
+          {/* ── RIGHT: Desktop Navigation ───────────────────────────────────── */}
+          <nav className="hidden sm:flex items-center" style={{ gap: 16 }}>
 
+            {/* Support */}
             <a
               href="https://wa.me/919000000000"
               target="_blank"
               rel="noreferrer"
-              className="hidden sm:flex items-center gap-2 px-3 py-2 rounded-lg text-slate-600 hover:bg-slate-100 transition text-sm font-medium"
+              className="flex items-center gap-2 text-slate-500 hover:text-slate-800 transition-colors rounded-lg px-3 py-2 hover:bg-slate-50"
+              style={{ fontSize: 14, fontWeight: 500, textDecoration: "none" }}
             >
-              <LifeBuoy className="w-4 h-4" /> Support
+              <LifeBuoy style={{ width: 18, height: 18, flexShrink: 0 }} />
+              <span className="hidden sm:inline">{t.navbar.support}</span>
             </a>
 
+            {/* Language Switcher - Exact match toggle */}
+            <div className="flex items-center justify-center shrink-0">
+              <LanguageToggle size="md" />
+            </div>
+
+            {/* Thin divider */}
+            <span className="hidden sm:block w-px bg-slate-200 mx-2" style={{ height: 24 }} />
+
+            {/* Profile avatar + name */}
             <button
               onClick={handleOpenModal}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl hover:bg-slate-100 transition cursor-pointer text-left border border-slate-200/60"
-              title="Click to view/edit profile"
+              className="flex items-center gap-2.5 text-slate-600 hover:text-slate-900 transition-colors rounded-lg px-3 py-2 hover:bg-slate-50 cursor-pointer"
+              title={t.navbar.viewOrEditProfile}
+              style={{ fontSize: 14, fontWeight: 500 }}
             >
-              <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-semibold text-sm shadow-sm">
+              {/* 38 px circular avatar */}
+              <div
+                className="bg-[#1e40af] text-white font-bold flex items-center justify-center shrink-0"
+                style={{ width: 36, height: 36, borderRadius: "50%", fontSize: 14, lineHeight: 1 }}
+              >
                 {initial}
               </div>
-              <div className="hidden sm:block leading-tight max-w-[130px]">
-                <p className="text-xs text-slate-900 font-bold truncate">
-                  {displayName}
-                </p>
-                <p className="text-[10px] text-slate-500 truncate">
-                  {user?.email}
-                </p>
-              </div>
+              <span
+                className="hidden md:inline font-semibold text-slate-700 max-w-[140px] truncate"
+                style={{ fontSize: 14 }}
+              >
+                {displayName}
+              </span>
             </button>
 
+            {/* Thin divider */}
+            <span className="hidden sm:block w-px bg-slate-200 mx-2" style={{ height: 24 }} />
+
+            {/* Logout */}
             <button
               onClick={signOut}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-slate-600 hover:bg-red-50 hover:text-red-600 transition text-sm font-medium"
+              className="flex items-center gap-2 text-slate-500 hover:text-red-600 transition-colors rounded-lg px-3 py-2 hover:bg-red-50 cursor-pointer"
+              style={{ fontSize: 14, fontWeight: 500 }}
             >
-              <LogOut className="w-4 h-4" />{" "}
-              <span className="hidden sm:inline">Logout</span>
+              <LogOut style={{ width: 18, height: 18, flexShrink: 0 }} />
+              <span className="hidden sm:inline">{t.navbar.logout}</span>
+            </button>
+
+          </nav>
+
+          {/* ── RIGHT: Mobile Navigation ─────────────────────────────────────── */}
+          <div className="flex sm:hidden items-center gap-2 shrink-0">
+            {/* Language Switcher - Exact match toggle */}
+            <LanguageToggle size="sm" />
+
+            {/* Hamburger Menu Button */}
+            <button
+              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              className="flex items-center justify-center p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer shrink-0"
+            >
+              <Menu style={{ width: 24, height: 24 }} />
             </button>
           </div>
+
+          {/* ── Mobile Menu Dropdown ─────────────────────────────────────────── */}
+          {showMobileMenu && (
+            <div className="sm:hidden absolute top-full left-0 right-0 bg-white border-b border-slate-200 shadow-lg z-50">
+              <div className="px-4 py-3 space-y-2">
+                {/* Support */}
+                <a
+                  href="https://wa.me/919000000000"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center gap-3 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg px-3 py-2.5 transition-colors"
+                  style={{ fontSize: 14, fontWeight: 500, textDecoration: "none" }}
+                >
+                  <LifeBuoy style={{ width: 18, height: 18, flexShrink: 0 }} />
+                  {t.navbar.support}
+                </a>
+
+                {/* Profile */}
+                <button
+                  onClick={() => {
+                    handleOpenModal();
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex items-center gap-3 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-lg px-3 py-2.5 transition-colors w-full text-left cursor-pointer"
+                  style={{ fontSize: 14, fontWeight: 500 }}
+                >
+                  <div
+                    className="bg-[#1e40af] text-white font-bold flex items-center justify-center shrink-0"
+                    style={{ width: 36, height: 36, borderRadius: "50%", fontSize: 14, lineHeight: 1 }}
+                  >
+                    {initial}
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="font-semibold text-slate-700">{displayName}</span>
+                    <span className="text-xs text-slate-500">{t.navbar.myProfile}</span>
+                  </div>
+                </button>
+
+                {/* Logout */}
+                <button
+                  onClick={() => {
+                    signOut();
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex items-center gap-3 text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg px-3 py-2.5 transition-colors w-full text-left cursor-pointer"
+                  style={{ fontSize: 14, fontWeight: 500 }}
+                >
+                  <LogOut style={{ width: 18, height: 18, flexShrink: 0 }} />
+                  {t.navbar.logout}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
@@ -107,9 +226,9 @@ export default function Navbar() {
                 <User className="w-5 h-5" />
               </div>
               <div>
-                <h3 className="font-bold text-slate-900 text-lg">My Profile</h3>
+                <h3 className="font-bold text-slate-900 text-lg">{t.navbar.myProfile}</h3>
                 <p className="text-xs text-slate-500">
-                  Update your contact details
+                  {t.navbar.updateContactDetails}
                 </p>
               </div>
             </div>
@@ -117,46 +236,46 @@ export default function Navbar() {
             <form onSubmit={handleSaveProfile} className="space-y-4 text-sm">
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Full Name
+                  {t.navbar.fullName}
                 </label>
                 <input
                   type="text"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-600 outline-none"
-                  placeholder="Enter full name"
+                  placeholder={t.navbar.enterFullName}
                 />
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Phone Number
+                  {t.navbar.phoneNumber}
                 </label>
                 <input
                   type="tel"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-600 outline-none"
-                  placeholder="10-digit mobile"
+                  placeholder={t.navbar.enterPhone}
                 />
               </div>
 
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">
-                  Address
+                  {t.navbar.address}
                 </label>
                 <textarea
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   rows={2}
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:border-blue-600 outline-none"
-                  placeholder="Enter full address"
+                  placeholder={t.navbar.enterAddress}
                 />
               </div>
 
               <div className="pt-2">
                 <p className="text-xs text-slate-400">
-                  Role:{" "}
+                  {t.navbar.role}:{" "}
                   <span className="font-bold text-slate-700 uppercase">
                     {profile?.role || "user"}
                   </span>
@@ -166,7 +285,7 @@ export default function Navbar() {
               {msg && (
                 <p
                   className={`text-xs p-2.5 rounded-xl ${
-                    msg.includes("Error")
+                    msg.includes(t.navbar.error)
                       ? "bg-red-50 text-red-600"
                       : "bg-emerald-50 text-emerald-700 font-semibold"
                   }`}
@@ -181,7 +300,7 @@ export default function Navbar() {
                   onClick={() => setShowModal(false)}
                   className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-medium text-xs"
                 >
-                  Cancel
+                  {t.navbar.cancel}
                 </button>
                 <button
                   type="submit"
@@ -189,10 +308,10 @@ export default function Navbar() {
                   className="px-5 py-2 rounded-xl bg-blue-700 hover:bg-blue-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-md shadow-blue-700/20"
                 >
                   {saving ? (
-                    "Saving..."
+                    t.navbar.saving
                   ) : (
                     <>
-                      <Check className="w-4 h-4" /> Save Changes
+                      <Check className="w-4 h-4" /> {t.navbar.saveChanges}
                     </>
                   )}
                 </button>

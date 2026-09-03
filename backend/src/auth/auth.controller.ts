@@ -100,13 +100,7 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: "Get current authenticated user profile" })
   getProfile(@GetUser() user: any) {
-    return {
-      id: user.id,
-      email: user.email,
-      phone: user.phone,
-      role: user.role?.name,
-      profile: user.profile,
-    };
+    return this.authService.getCurrentUserProfile(user.id);
   }
 
   @Post("forgot-password")

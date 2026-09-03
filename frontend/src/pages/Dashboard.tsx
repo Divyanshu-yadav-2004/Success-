@@ -30,6 +30,7 @@ import Navbar from "@/components/Navbar";
 import { SERVICES } from "@/lib/services";
 import { formatApplicationId, downloadReceipt } from "@/lib/receipt";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { apiRequest, API_BASE_URL, getAuthHeaders } from "@/lib/apiClient";
 import { normalizeApplication, type Application } from "@/lib/types";
 import type { LucideIcon } from "lucide-react";
@@ -44,6 +45,7 @@ import {
   AdminDeliveryLogs,
   DeliverDocumentModal,
   AnnouncementFormModal,
+  AdminShell,
 } from "@/features/success-management";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -57,7 +59,8 @@ type AdminTab = "overview" | "applications" | "users" | "announcements" | "logs"
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { user, profile, isAdmin } = useAuth();
+  const { user, profile, isAdmin, signOut } = useAuth();
+  const { t } = useLanguage();
 
   const [applications, setApplications] = useState<Application[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,11 +107,29 @@ export default function Dashboard() {
 
   const handleUpdateStatus = async (
     appId: string,
-    newStatus: "pending" | "approved" | "rejected" | "completed",
-  ) => {
+    newStatus: "pending" | "processed" | "approved" | "rejected" | "completed",
+  ): Promise<Application> => {
     setUpdatingId(appId);
+    const previousApplication = applications.find((app) => app.id === appId);
+    if (!previousApplication) {
+      setUpdatingId(null);
+      throw new Error("Application is no longer available.");
+    }
+
+    const notes = adminNotes[appId] || "";
+    const optimisticApplication: Application = {
+      ...previousApplication,
+      status: newStatus,
+      admin_notes: notes,
+      updated_at: new Date().toISOString(),
+    };
+
+    // The list and details drawer update immediately; there is no full detail
+    // refetch after a successful status patch.
+    setApplications((prev) =>
+      prev.map((item) => (item.id === appId ? optimisticApplication : item)),
+    );
     try {
-      const notes = adminNotes[appId] || "";
       const nestStatus =
         newStatus === "approved"
           ? "APPROVED"
@@ -116,6 +137,8 @@ export default function Dashboard() {
           ? "REJECTED"
           : newStatus === "completed"
           ? "COMPLETED"
+          : newStatus === "processed"
+          ? "PROCESSED"
           : "UNDER_REVIEW";
 
       const data = await apiRequest<any>(`/applications/${appId}/status`, {
@@ -126,17 +149,23 @@ export default function Dashboard() {
         }),
       });
 
-      if (data) {
-        const normalized = normalizeApplication(data);
-        setApplications((prev) =>
-          prev.map((item) => (item.id === appId ? normalized : item)),
-        );
-        if (selectedApp?.id === appId) {
-          setSelectedApp(normalized);
-        }
-      }
+      const confirmedApplication: Application = {
+        ...optimisticApplication,
+        status: (data?.status || nestStatus).toLowerCase() as Application["status"],
+        admin_notes: data?.adminNotes ?? notes,
+        updated_at: data?.updatedAt || optimisticApplication.updated_at,
+        completed_at: data?.completedAt || optimisticApplication.completed_at,
+      };
+      setApplications((prev) =>
+        prev.map((item) => (item.id === appId ? confirmedApplication : item)),
+      );
+      return confirmedApplication;
     } catch (err) {
-      alert(`Error updating status: ${err instanceof Error ? err.message : String(err)}`);
+      // Restore exactly the state that was visible before this request.
+      setApplications((prev) =>
+        prev.map((item) => (item.id === appId ? previousApplication : item)),
+      );
+      throw err;
     } finally {
       setUpdatingId(null);
     }
@@ -154,6 +183,8 @@ export default function Dashboard() {
           ? "REJECTED"
           : currentApp?.status === "completed"
           ? "COMPLETED"
+          : currentApp?.status === "processed"
+          ? "PROCESSED"
           : "UNDER_REVIEW";
 
       await apiRequest<any>(`/applications/${appId}/status`, {
@@ -213,7 +244,39 @@ export default function Dashboard() {
 
   const pendingCount = applications.filter((a) => a.status === "pending").length;
   const approvedCount = applications.filter((a) => a.status === "approved" || a.status === "completed").length;
-  const rejectedCount = applications.filter((a) => a.status === "rejected").length;
+  if (isAdmin) {
+    return (
+      <>
+        <AdminShell
+          user={user}
+          onLogout={signOut}
+          applications={applications}
+          loadingApplications={loading}
+          applicationsError={error}
+          onUpdateStatus={async (appId, newStatus, notes) => {
+            const updated = await handleUpdateStatus(appId, newStatus);
+            if (notes) {
+              setAdminNotes((prev) => ({ ...prev, [appId]: notes }));
+            }
+            return updated;
+          }}
+          onDeliverClick={(app) => setDeliveringApp(app)}
+        />
+
+        {/* Deliver Document Modal */}
+        {deliveringApp && (
+          <DeliverDocumentModal
+            application={deliveringApp}
+            isOpen={true}
+            onClose={() => setDeliveringApp(null)}
+            onSuccess={() => {
+              fetchApplications();
+            }}
+          />
+        )}
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -221,15 +284,7 @@ export default function Dashboard() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8">
         {/* CUSTOMER WELCOME BANNER */}
-        {!isAdmin && (
-          <WelcomeBanner
-            customerName={profile?.full_name || user?.email?.split("@")[0]}
-            onExplore={() => {
-              const el = document.getElementById("available-services");
-              if (el) el.scrollIntoView({ behavior: "smooth" });
-            }}
-          />
-        )}
+        {!isAdmin && <WelcomeBanner />}
 
         {/* ADMIN MANAGEMENT TABS HEADER */}
         {isAdmin && (
@@ -243,7 +298,7 @@ export default function Dashboard() {
                     : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
-                <LayoutDashboard className="w-4 h-4" /> Overview Dashboard
+                <LayoutDashboard className="w-4 h-4" /> {t.admin.overviewDashboard}
               </button>
 
               <button
@@ -254,7 +309,7 @@ export default function Dashboard() {
                     : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
-                <FileText className="w-4 h-4" /> All Applications ({applications.length})
+                <FileText className="w-4 h-4" /> {t.admin.allApplications} ({applications.length})
               </button>
 
               <button
@@ -265,7 +320,7 @@ export default function Dashboard() {
                     : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
-                <Users className="w-4 h-4" /> User Management
+                <Users className="w-4 h-4" /> {t.admin.userManagement}
               </button>
 
               <button
@@ -276,7 +331,7 @@ export default function Dashboard() {
                     : "text-slate-600 hover:bg-slate-100"
                 }`}
               >
-                <ListFilter className="w-4 h-4" /> Delivery Logs
+                <ListFilter className="w-4 h-4" /> {t.admin.deliveryLogs}
               </button>
             </div>
 
@@ -284,7 +339,7 @@ export default function Dashboard() {
               onClick={() => setShowAnnouncementModal(true)}
               className="px-4 py-2 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-2 shadow-md shadow-indigo-600/20 transition cursor-pointer"
             >
-              <Megaphone className="w-4 h-4" /> Publish Announcement
+              <Megaphone className="w-4 h-4" /> {t.admin.publishAnnouncement}
             </button>
           </div>
         )}
@@ -310,10 +365,10 @@ export default function Dashboard() {
               <div>
                 <h2 className="text-xl font-bold text-slate-900 flex items-center gap-2">
                   <ShieldCheck className="w-5 h-5 text-blue-600" />
-                  All System Submissions
+                  {t.admin.allSystemSubmissions}
                 </h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  Manage citizen service submissions and deliver government documents cleanly
+                  {t.admin.manageCitizenSubmissions}
                 </p>
               </div>
 
@@ -325,7 +380,7 @@ export default function Dashboard() {
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by ID, name, service..."
+                    placeholder={t.admin.searchByIdNameService}
                     className="w-full pl-9 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:border-blue-600"
                   />
                 </div>
@@ -341,7 +396,7 @@ export default function Dashboard() {
                         : "text-slate-600 hover:bg-slate-100"
                     }`}
                   >
-                    All
+                    {t.admin.all}
                   </button>
                   <button
                     onClick={() => setStatusFilter("pending")}
@@ -351,7 +406,7 @@ export default function Dashboard() {
                         : "text-slate-600 hover:bg-slate-100"
                     }`}
                   >
-                    Pending
+                    {t.admin.pending}
                   </button>
                   <button
                     onClick={() => setStatusFilter("completed")}
@@ -361,7 +416,7 @@ export default function Dashboard() {
                         : "text-slate-600 hover:bg-slate-100"
                     }`}
                   >
-                    Completed
+                    {t.admin.completed}
                   </button>
                 </div>
               </div>
@@ -371,15 +426,15 @@ export default function Dashboard() {
             <div className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-sm">
               {loading ? (
                 <div className="p-12 text-center text-slate-400 flex items-center justify-center gap-2 text-xs">
-                  <Loader2 className="w-5 h-5 animate-spin" /> Loading applications...
+                  <Loader2 className="w-5 h-5 animate-spin" /> {t.admin.loadingApplications}
                 </div>
               ) : error ? (
                 <div className="p-12 text-center text-red-600 text-xs">
-                  Error loading applications: {error}
+                  {t.admin.errorLoadingApplications}: {error}
                 </div>
               ) : filteredApplications.length === 0 ? (
                 <div className="p-12 text-center text-slate-400 text-xs">
-                  No applications match your current search/filter.
+                  {t.admin.noApplicationsMatch}
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
@@ -394,6 +449,12 @@ export default function Dashboard() {
                       (s) => s.id === app.service_type,
                     );
                     const isCompleted = app.status === "completed" || app.status === "approved";
+                    
+                    // Get translated service name
+                    const serviceKey = serviceConfig?.id === "pan_card" ? "panCard" : 
+                                      serviceConfig?.id === "gumasta_license" ? "gumastaLicense" : 
+                                      serviceConfig?.id === "msme_registration" ? "msmeRegistration" : "panCard";
+                    const translatedServiceName = t.services[serviceKey as keyof typeof t.services] || serviceConfig?.name || app.service_type;
 
                     return (
                       <div
@@ -414,15 +475,15 @@ export default function Dashboard() {
                                   : "bg-amber-100 text-amber-800"
                               }`}
                             >
-                              {isCompleted ? "✅ Completed / Delivered" : app.status}
+                              {isCompleted ? `✅ ${t.admin.completed} / ${t.admin.delivered}` : app.status}
                             </span>
                           </div>
 
                           <p className="font-bold text-slate-900 text-sm">
-                            {serviceConfig?.name || app.service_type}
+                            {translatedServiceName}
                           </p>
                           <p className="text-xs text-slate-500">
-                            Applicant: <strong className="text-slate-800">{applicant}</strong> · Date:{" "}
+                            {t.dashboard.applicant}: <strong className="text-slate-800">{applicant}</strong> · {t.dashboard.date}:{" "}
                             {new Date(app.created_at).toLocaleDateString("en-IN")}
                           </p>
                         </div>
@@ -433,14 +494,14 @@ export default function Dashboard() {
                             onClick={() => setSelectedApp(app)}
                             className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition"
                           >
-                            Details
+                            {t.dashboard.details}
                           </button>
 
                           <button
                             onClick={() => setDeliveringApp(app)}
                             className="px-4 py-2 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-700 hover:from-blue-700 hover:to-indigo-800 text-white font-bold text-xs shadow-md shadow-blue-600/20 flex items-center gap-1.5 transition cursor-pointer"
                           >
-                            <Send className="w-3.5 h-3.5" /> 🚀 Deliver Document
+                            <Send className="w-3.5 h-3.5" /> 🚀 {t.admin.deliverDocument}
                           </button>
                         </div>
                       </div>
@@ -458,10 +519,10 @@ export default function Dashboard() {
             <div className="flex items-end justify-between mb-5">
               <div>
                 <h2 className="text-xl font-bold text-slate-900">
-                  Available Services
+                  {t.dashboard.availableServices}
                 </h2>
                 <p className="text-sm text-slate-500 mt-0.5">
-                  Select an existing service below to start your application
+                  {t.dashboard.selectServiceToStart}
                 </p>
               </div>
             </div>
@@ -469,6 +530,18 @@ export default function Dashboard() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
               {SERVICES.map((svc) => {
                 const Icon = ICONS[svc.icon] ?? CreditCard;
+                // Get translated service details
+                const serviceKey = svc.id === "pan_card" ? "panCard" : 
+                                  svc.id === "gumasta_license" ? "gumastaLicense" : 
+                                  svc.id === "msme_registration" ? "msmeRegistration" : "panCard";
+                const translatedName = t.services[serviceKey as keyof typeof t.services] || svc.name;
+                const translatedTagline = svc.id === "pan_card" ? t.services.panCardTagline :
+                                         svc.id === "gumasta_license" ? t.services.gumastaLicenseTagline :
+                                         svc.id === "msme_registration" ? t.services.msmeRegistrationTagline : svc.tagline;
+                const translatedDescription = svc.id === "pan_card" ? t.services.panCardDescription :
+                                             svc.id === "gumasta_license" ? t.services.gumastaLicenseDescription :
+                                             svc.id === "msme_registration" ? t.services.msmeRegistrationDescription : svc.description;
+                
                 return (
                   <button
                     key={svc.id}
@@ -484,17 +557,17 @@ export default function Dashboard() {
                       <Icon className="w-5 h-5" strokeWidth={2} />
                     </div>
                     <h3 className="relative z-10 font-bold text-slate-900 text-lg leading-snug">
-                      {svc.name}
+                      {translatedName}
                     </h3>
                     <p className="relative z-10 text-xs text-slate-400 mt-1 mb-3 font-semibold uppercase tracking-wider">
-                      {svc.tagline}
+                      {translatedTagline}
                     </p>
                     <p className="relative z-10 text-sm text-slate-600 leading-relaxed flex-1">
-                      {svc.description}
+                      {translatedDescription}
                     </p>
                     <div className="relative z-10 mt-5 pt-4 border-t border-slate-100 flex items-center justify-between">
                       <div className="flex items-baseline gap-1">
-                        <span className="text-xs text-slate-400 font-medium">Fee</span>
+                        <span className="text-xs text-slate-400 font-medium">{t.dashboard.fee}</span>
                         <span className="text-xl font-extrabold text-slate-900">
                           &#8377;{svc.fee}
                         </span>
@@ -502,7 +575,7 @@ export default function Dashboard() {
                       <span
                         className={`flex items-center gap-1.5 text-sm font-bold bg-gradient-to-r ${svc.accent} bg-clip-text text-transparent group-hover:gap-2.5 transition-all`}
                       >
-                        Apply Now
+                        {t.dashboard.applyNow}
                         <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
                       </span>
                     </div>
@@ -513,16 +586,16 @@ export default function Dashboard() {
 
             {/* Customer Recent Applications */}
             <h2 className="text-xl font-bold text-slate-900 mb-5">
-              My Submitted Applications
+              {t.dashboard.mySubmittedApplications}
             </h2>
             <div className="bg-white rounded-3xl border border-slate-200/80 overflow-hidden shadow-sm">
               {loading ? (
                 <div className="p-10 text-center text-slate-400 flex items-center justify-center gap-2 text-xs">
-                  <Loader2 className="w-5 h-5 animate-spin" /> Loading applications...
+                  <Loader2 className="w-5 h-5 animate-spin" /> {t.dashboard.loadingApplications}
                 </div>
               ) : applications.length === 0 ? (
                 <div className="p-10 text-center text-slate-400 text-sm">
-                  No applications found. Choose a service above to get started.
+                  {t.dashboard.noApplicationsFound}
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
@@ -530,6 +603,12 @@ export default function Dashboard() {
                     const svc = SERVICES.find((s) => s.id === app.service_type);
                     const isDelivered = app.status === "completed" || app.status === "approved";
                     const amount = app.form_data?.amount || svc?.fee || 0;
+                    
+                    // Get translated service name
+                    const serviceKey = svc?.id === "pan_card" ? "panCard" : 
+                                      svc?.id === "gumasta_license" ? "gumastaLicense" : 
+                                      svc?.id === "msme_registration" ? "msmeRegistration" : "panCard";
+                    const translatedServiceName = t.services[serviceKey as keyof typeof t.services] || svc?.name || app.service_type;
 
                     return (
                       <div
@@ -548,15 +627,15 @@ export default function Dashboard() {
                                   : "bg-amber-100 text-amber-800"
                               }`}
                             >
-                              {isDelivered ? "✅ Completed" : "⏳ Processing"}
+                              {isDelivered ? `✅ ${t.dashboard.completed}` : `⏳ ${t.dashboard.processing}`}
                             </span>
                           </div>
                           <p className="font-bold text-slate-900 text-sm">
-                            {svc?.name || app.service_type}
+                            {translatedServiceName}
                           </p>
                           {isDelivered && (
                             <p className="text-xs text-emerald-700 font-bold bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-100 inline-flex items-center gap-1.5 mt-1">
-                              🎉 Your {svc?.name || "document"} has arrived!
+                              🎉 {t.dashboard.documentArrived}
                             </p>
                           )}
                         </div>
@@ -566,7 +645,7 @@ export default function Dashboard() {
                             onClick={() => setSelectedApp(app)}
                             className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs transition cursor-pointer"
                           >
-                            View Application
+                            {t.dashboard.viewApplication}
                           </button>
                         </div>
                       </div>
@@ -589,7 +668,13 @@ export default function Dashboard() {
                   {formatApplicationId(selectedApp.application_no || selectedApp.id)}
                 </span>
                 <h3 className="font-bold text-slate-900 text-lg mt-1">
-                  {SERVICES.find((s) => s.id === selectedApp.service_type)?.name || selectedApp.service_type}
+                  {(() => {
+                    const svc = SERVICES.find((s) => s.id === selectedApp.service_type);
+                    const serviceKey = svc?.id === "pan_card" ? "panCard" : 
+                                      svc?.id === "gumasta_license" ? "gumastaLicense" : 
+                                      svc?.id === "msme_registration" ? "msmeRegistration" : "panCard";
+                    return t.services[serviceKey as keyof typeof t.services] || svc?.name || selectedApp.service_type;
+                  })()}
                 </h3>
               </div>
               <button
@@ -612,7 +697,7 @@ export default function Dashboard() {
               {(selectedApp.status === "completed" || selectedApp.status === "approved") && (
                 <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-center space-y-2">
                   <p className="font-bold text-emerald-900 text-sm">
-                    🎉 Your document has arrived!
+                    🎉 {t.dashboard.documentArrived}
                   </p>
                   <p className="text-emerald-700 text-xs">
                     Your official certificate/document is ready to view and download securely.
@@ -626,14 +711,14 @@ export default function Dashboard() {
                     }
                     className="px-5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-xs inline-flex items-center gap-1.5 shadow-md shadow-emerald-700/20 cursor-pointer"
                   >
-                    <Download className="w-4 h-4" /> Download PDF Document
+                    <Download className="w-4 h-4" /> {t.dashboard.downloadPdfDocument}
                   </button>
                 </div>
               )}
 
               <div>
                 <h4 className="font-bold text-slate-800 uppercase tracking-wider mb-2">
-                  Submitted Information
+                  {t.dashboard.submittedInformation}
                 </h4>
                 <div className="bg-slate-50 p-3.5 rounded-2xl space-y-2">
                   {Object.entries(selectedApp.form_data || {}).map(([key, val]) => (
@@ -655,7 +740,7 @@ export default function Dashboard() {
                 onClick={() => setSelectedApp(null)}
                 className="px-5 py-2.5 bg-slate-900 text-white rounded-xl text-xs font-bold cursor-pointer"
               >
-                Close
+                {t.dashboard.close}
               </button>
             </div>
           </div>

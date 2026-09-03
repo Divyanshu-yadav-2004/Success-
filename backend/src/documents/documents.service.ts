@@ -121,4 +121,27 @@ export class DocumentsService {
       downloadUrl,
     };
   }
+
+  async getDocumentsByApplication(applicationId: string, user: any) {
+    const app = await this.prisma.application.findUnique({
+      where: { id: applicationId },
+    });
+
+    if (!app) {
+      throw new NotFoundException(`Application not found: ${applicationId}`);
+    }
+
+    const userRole: string = user.role?.name || user.role || "";
+    const isAdmin = STAFF_ROLES.includes(userRole);
+
+    if (!isAdmin && app.userId !== user.id) {
+      throw new BadRequestException("Unauthorized to access documents for this application");
+    }
+
+    return this.prisma.applicationDocument.findMany({
+      where: { applicationId },
+      orderBy: { uploadedAt: "desc" },
+    });
+  }
 }
+

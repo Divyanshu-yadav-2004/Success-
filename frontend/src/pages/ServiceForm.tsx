@@ -23,6 +23,7 @@ import DocumentUpload, {
 } from "@/components/DocumentUpload";
 import { SERVICE_MAP } from "@/lib/services";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { downloadReceipt, formatApplicationId } from "@/lib/receipt";
 import { apiRequest } from "@/lib/apiClient";
 import { normalizeApplication, type Application } from "@/lib/types";
@@ -32,6 +33,7 @@ import {
   verifyRazorpayPayment,
   openRazorpayCheckout,
 } from "@/lib/razorpay";
+import { PaymentGatewayUI } from "@/components/PaymentGatewayUI";
 
 type Step = "details" | "documents" | "payment" | "success";
 
@@ -39,6 +41,7 @@ export default function ServiceForm() {
   const { serviceId } = useParams<{ serviceId: string }>();
   const navigate = useNavigate();
   const { user, profile } = useAuth();
+  const { t } = useLanguage();
   const service = serviceId ? SERVICE_MAP[serviceId] : undefined;
 
   const [step, setStep] = useState<Step>("details");
@@ -54,12 +57,12 @@ export default function ServiceForm() {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-slate-600">Service not found.</p>
+          <p className="text-slate-600">{t.serviceForm.serviceNotFound}</p>
           <button
             onClick={() => navigate("/")}
             className="mt-3 text-blue-600 font-semibold"
           >
-            Back to dashboard
+            {t.serviceForm.backToDashboard}
           </button>
         </div>
       </div>
@@ -72,7 +75,7 @@ export default function ServiceForm() {
   const submitDetails = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) {
-      setError("User session lost. Please log in again.");
+      setError(t.serviceForm.userSessionLost);
       return;
     }
     setSubmitting(true);
@@ -117,7 +120,7 @@ export default function ServiceForm() {
       setStep("documents");
     } catch (err: any) {
       setSubmitting(false);
-      setError(err.message || "Failed to submit. Please try again.");
+      setError(err.message || t.serviceForm.failedToSubmit);
     }
   };
 
@@ -212,7 +215,7 @@ export default function ServiceForm() {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes("cancelled")) {
         setSubmitting(false);
-        setError("Payment was cancelled. You can try again.");
+        setError(t.serviceForm.paymentCancelled);
         return;
       }
       await new Promise((r) => setTimeout(r, 1000));
@@ -222,22 +225,26 @@ export default function ServiceForm() {
   };
 
   const steps: { key: Step; label: string }[] = [
-    { key: "details", label: "Details" },
-    { key: "documents", label: "Documents" },
-    { key: "payment", label: "Payment" },
-    { key: "success", label: "Receipt" },
+    { key: "details", label: t.serviceForm.details },
+    { key: "documents", label: t.serviceForm.documents },
+    { key: "payment", label: t.serviceForm.payment },
+    { key: "success", label: t.serviceForm.receipt },
   ];
   const currentIndex = steps.findIndex((s) => s.key === step);
 
   return (
     <div className="min-h-screen bg-slate-50">
       <Navbar />
-      <main className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main
+        className={`mx-auto px-4 sm:px-6 lg:px-8 py-8 transition-all duration-300 ${
+          step === "payment" ? "max-w-5xl" : "max-w-3xl"
+        }`}
+      >
         <button
           onClick={() => navigate("/")}
           className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 text-sm font-medium mb-6"
         >
-          <ArrowLeft className="w-4 h-4" /> Back to dashboard
+          <ArrowLeft className="w-4 h-4" /> {t.serviceForm.backToDashboard}
         </button>
 
         {/* Stepper */}
@@ -269,7 +276,7 @@ export default function ServiceForm() {
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <Field label="Email" required>
+              <Field label={t.serviceForm.email} required>
                 <input
                   type="email"
                   value={user?.email ?? ""}
@@ -277,7 +284,7 @@ export default function ServiceForm() {
                   className="w-full px-3 py-2.5 rounded-lg border border-slate-300 bg-slate-50 text-slate-500 text-sm"
                 />
               </Field>
-              <Field label="Phone Number" required>
+              <Field label={t.serviceForm.phoneNumber} required>
                 <input
                   type="tel"
                   required
@@ -312,7 +319,7 @@ export default function ServiceForm() {
                       onChange={(e) => setField(f.name, e.target.value)}
                       className="w-full px-3 py-2.5 rounded-lg border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none text-sm bg-white"
                     >
-                      <option value="">Select...</option>
+                      <option value="">{t.serviceForm.select}</option>
                       {f.options?.map((o) => (
                         <option key={o} value={o}>
                           {o}
@@ -337,7 +344,7 @@ export default function ServiceForm() {
 
             <div className="mt-6 flex items-center justify-between">
               <p className="text-sm text-slate-500">
-                Service fee:{" "}
+                {t.serviceForm.serviceFee}:{" "}
                 <span className="font-bold text-slate-900">Rs. {service.fee}</span>
               </p>
               <button
@@ -350,7 +357,7 @@ export default function ServiceForm() {
                 ) : (
                   <ArrowRight className="w-5 h-5" />
                 )}
-                Proceed to Documents
+                {t.serviceForm.proceedToDocuments}
               </button>
             </div>
           </form>
@@ -364,10 +371,10 @@ export default function ServiceForm() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-slate-900">
-                  Upload Documents
+                  {t.serviceForm.uploadDocuments}
                 </h1>
                 <p className="text-slate-500 text-sm">
-                  Upload all required documents to proceed with your application.
+                  {t.serviceForm.uploadRequiredDocuments}
                 </p>
               </div>
             </div>
@@ -375,13 +382,11 @@ export default function ServiceForm() {
             <div className="mt-6 rounded-xl bg-amber-50 border border-amber-200 p-3 flex items-start gap-2">
               <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
               <p className="text-xs text-amber-700">
-                Accepted formats: JPG, PNG, and PDF. Maximum file size: 10 MB.
-                Files marked with <span className="font-bold">*</span> are
-                mandatory.
+                {t.serviceForm.acceptedFormats}
               </p>
             </div>
 
-            <div className="mt-6 space-y-5">
+            <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-5">
               {service.documents.map((doc) => (
                 <DocumentUpload
                   key={doc.name}
@@ -408,7 +413,7 @@ export default function ServiceForm() {
                 onClick={() => setStep("details")}
                 className="flex items-center gap-1.5 text-slate-600 hover:text-slate-900 text-sm font-medium"
               >
-                <ArrowLeft className="w-4 h-4" /> Back
+                <ArrowLeft className="w-4 h-4" /> {t.serviceForm.back}
               </button>
               <button
                 type="button"
@@ -421,66 +426,22 @@ export default function ServiceForm() {
                 ) : (
                   <ArrowRight className="w-5 h-5" />
                 )}
-                Proceed to Payment
+                {t.serviceForm.proceedToPayment}
               </button>
             </div>
           </div>
         )}
 
         {step === "payment" && application && (
-          <div className="bg-white rounded-2xl border border-slate-200 p-6 sm:p-8">
-            <h1 className="text-xl font-bold text-slate-900">Payment</h1>
-            <p className="text-slate-500 text-sm mt-1 mb-6">
-              Review your application and complete the payment to generate your
-              receipt.
-            </p>
-
-            <div className="rounded-xl border border-slate-200 p-5 mb-6 space-y-2 text-sm">
-              <Row label="Application ID" value={formatApplicationId(application.id)} />
-              <Row label="Service" value={service.name} />
-              <Row label="Applicant" value={application.applicant_name || application.form_data?.applicant_name || "Applicant"} />
-              <Row label="Email" value={user?.email ?? ""} />
-              <Row
-                label="Documents"
-                value={`${Object.keys(uploads).length} of ${service.documents.length} uploaded`}
-              />
-              <div className="pt-3 mt-3 border-t border-slate-200 flex items-center justify-between">
-                <span className="font-semibold text-slate-700">Amount Payable</span>
-                <span className="text-2xl font-bold text-slate-900">
-                  Rs. {service.fee}
-                </span>
-              </div>
-            </div>
-
-            <div className="rounded-xl bg-blue-50 border border-blue-200 p-4 mb-6 flex items-start gap-3">
-              <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
-              <p className="text-sm text-blue-800">
-                Click below to pay securely. If Razorpay is configured, a
-                checkout window opens; otherwise a simulated payment runs for
-                demonstration. Your payment is verified server-side before the
-                receipt is generated.
-              </p>
-            </div>
-
-            {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
-
-            <button
-              onClick={payNow}
-              disabled={submitting}
-              className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white font-semibold py-3.5 rounded-lg transition shadow-lg shadow-blue-600/20"
-            >
-              {submitting ? (
-                <>
-                  <Loader2 className="w-5 h-5 animate-spin" /> Processing
-                  payment...
-                </>
-              ) : (
-                <>
-                  <Lock className="w-5 h-5" /> Pay Rs. {service.fee} securely
-                </>
-              )}
-            </button>
-          </div>
+          <PaymentGatewayUI
+            service={service}
+            application={application}
+            userEmail={user?.email ?? ""}
+            submitting={submitting}
+            error={error}
+            onPay={payNow}
+            onBack={() => setStep("documents")}
+          />
         )}
 
         {step === "success" && application && (
@@ -494,16 +455,16 @@ export default function ServiceForm() {
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              ✓ Application Submitted Successfully
+              {t.serviceForm.applicationSubmittedSuccessfully}
             </h1>
             <p className="text-slate-500 text-sm mt-1.5 max-w-lg mx-auto">
-              Your application has been registered, saved in our central portal database, and assigned a unique Application ID for tracking.
+              {t.serviceForm.applicationRegistered}
             </p>
 
             {/* Application ID Copy Card */}
             <div className="my-6 max-w-md mx-auto bg-slate-50 border-2 border-blue-100 rounded-2xl p-4 sm:p-5 flex flex-col items-center gap-2">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Unique Application ID
+                {t.serviceForm.uniqueApplicationId}
               </span>
               <div className="flex items-center gap-3 bg-white px-4 py-2.5 rounded-xl border border-slate-200 shadow-xs w-full justify-between">
                 <span className="font-mono text-xl sm:text-2xl font-black text-blue-700 tracking-wider">
@@ -520,17 +481,17 @@ export default function ServiceForm() {
                 >
                   {copied ? (
                     <>
-                      <Check className="w-4 h-4 text-emerald-600" /> Copied!
+                      <Check className="w-4 h-4 text-emerald-600" /> {t.serviceForm.copied}
                     </>
                   ) : (
                     <>
-                      <Copy className="w-4 h-4" /> Copy ID
+                      <Copy className="w-4 h-4" /> {t.serviceForm.copyId}
                     </>
                   )}
                 </button>
               </div>
               <p className="text-[11px] text-amber-700 bg-amber-50 px-3 py-1 rounded-full font-medium border border-amber-200/60 mt-1">
-                🔒 Keep your Application ID safe for tracking & reference
+                {t.serviceForm.keepApplicationIdSafe}
               </p>
             </div>
 
@@ -543,13 +504,13 @@ export default function ServiceForm() {
                   </div>
                   <div>
                     <p className="text-xs font-bold text-emerald-900">
-                      ✉ Confirmation email sent to:
+                      {t.serviceForm.confirmationEmailSent}
                     </p>
                     <p className="text-sm font-semibold text-emerald-800 break-all">
                       {user?.email || application.applicant_email || application.form_data?.applicant_email || "your registered email"}
                     </p>
                     <p className="text-[11px] text-emerald-700 mt-0.5">
-                      A copy of your submission receipt and status details has been delivered.
+                      {t.serviceForm.aCopyDelivered}
                     </p>
                   </div>
                 </div>
@@ -560,10 +521,10 @@ export default function ServiceForm() {
                   </div>
                   <div>
                     <p className="text-xs font-bold text-amber-900">
-                      ⚠️ Application Saved (Email Delivery Notice)
+                      {t.serviceForm.applicationSavedEmailNotice}
                     </p>
                     <p className="text-xs text-amber-800 mt-0.5">
-                      Your application is saved securely. Automated email dispatch could not complete, but your Application ID is valid.
+                      {t.serviceForm.automatedEmailCouldNotComplete}
                     </p>
                   </div>
                 </div>
@@ -572,13 +533,13 @@ export default function ServiceForm() {
 
             {/* Summary details */}
             <div className="rounded-2xl border border-slate-200 p-5 mb-6 text-left space-y-2.5 text-sm max-w-md mx-auto bg-white">
-              <Row label="Service Name" value={service.name} />
-              <Row label="Applicant Name" value={application.applicant_name || application.form_data?.applicant_name || profile?.full_name || "Applicant"} />
-              <Row label="Submission Time" value={new Date(application.created_at).toLocaleString("en-IN")} />
-              <Row label="Current Status" value="Submitted / Under Review" />
+              <Row label={t.serviceForm.serviceName} value={service.name} />
+              <Row label={t.serviceForm.applicantName} value={application.applicant_name || application.form_data?.applicant_name || profile?.full_name || "Applicant"} />
+              <Row label={t.serviceForm.submissionTime} value={new Date(application.created_at).toLocaleString("en-IN")} />
+              <Row label={t.serviceForm.currentStatus} value={t.serviceForm.submittedUnderReview} />
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-                  <Phone className="w-3.5 h-3.5 text-blue-600" /> Official Support
+                  <Phone className="w-3.5 h-3.5 text-blue-600" /> {t.serviceForm.officialSupport}
                 </span>
                 <span className="font-mono text-sm font-bold text-slate-900">
                   7415921990
@@ -592,13 +553,13 @@ export default function ServiceForm() {
                 onClick={() => navigate("/")}
                 className="flex-1 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold px-6 py-3.5 rounded-xl transition shadow-md shadow-blue-600/20 text-sm"
               >
-                <ArrowRight className="w-4 h-4" /> Track Application
+                <ArrowRight className="w-4 h-4" /> {t.serviceForm.trackApplication}
               </button>
               <button
-                onClick={() => downloadReceipt(application)}
+                onClick={() => void downloadReceipt(application)}
                 className="flex-1 flex items-center justify-center gap-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-6 py-3.5 rounded-xl transition text-sm"
               >
-                <Download className="w-4 h-4 text-slate-600" /> Download PDF Receipt
+                <Download className="w-4 h-4 text-slate-600" /> {t.serviceForm.downloadPdfReceipt}
               </button>
             </div>
           </div>

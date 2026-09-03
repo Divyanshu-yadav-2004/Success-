@@ -1,4 +1,4 @@
-import { Controller, Post, Body, UseGuards } from "@nestjs/common";
+import { Controller, Post, Body, UseGuards, HttpCode } from "@nestjs/common";
 import { ApiTags, ApiOperation, ApiBearerAuth } from "@nestjs/swagger";
 import { AiService } from "./ai.service";
 import { ChatRequestDto } from "./dto/chat.dto";
@@ -11,6 +11,7 @@ export class AiController {
   constructor(private readonly aiService: AiService) {}
 
   @Post("chat")
+  @HttpCode(200)
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Send message to AI Assistant with server-side database tool calling" })

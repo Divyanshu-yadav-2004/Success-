@@ -72,4 +72,18 @@ export class DocumentsController {
   getDownloadUrl(@Param("id") id: string, @GetUser() user: any) {
     return this.documentsService.getDownloadUrl(id, user);
   }
+
+  /**
+   * GET /api/v1/documents/application/:applicationId
+   * Return all uploaded documents for a specific application.
+   */
+  @Get("application/:applicationId")
+  @ApiOperation({ summary: "Get documents for a specific application" })
+  getDocumentsByApplication(
+    @Param("applicationId") applicationId: string,
+    @GetUser() user: any,
+  ) {
+    return this.documentsService.getDocumentsByApplication(applicationId, user);
+  }
 }
+

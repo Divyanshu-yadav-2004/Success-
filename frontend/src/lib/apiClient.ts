@@ -39,6 +39,9 @@ const AUTH_REFRESH_EXCLUSIONS = [
   "/auth/reset-password",
 ];
 
+const DEFAULT_REQUEST_TIMEOUT_MS = 20_000;
+let refreshInFlight: Promise<string | null> | null = null;
+
 function isAuthExcluded(endpoint: string): boolean {
   return AUTH_REFRESH_EXCLUSIONS.some((exc) => endpoint.includes(exc));
 }
@@ -60,6 +63,10 @@ export function removeStoredToken() {
 
 // ── Internal: attempt a single token refresh ─────────────────────────────────
 async function attemptTokenRefresh(): Promise<string | null> {
+  // Many components may receive the same expired-token response together.
+  // Share one refresh instead of creating a refresh-request storm.
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
   const refreshToken = localStorage.getItem("refreshToken");
   if (!refreshToken) {
     return null;
@@ -94,6 +101,28 @@ async function attemptTokenRefresh(): Promise<string | null> {
     removeStoredToken();
     return null;
   }
+  })();
+
+  try {
+    return await refreshInFlight;
+  } finally {
+    refreshInFlight = null;
+  }
+}
+
+async function fetchWithTimeout(url: string, options: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...options, signal: options.signal || controller.signal });
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw new Error("The request timed out. Please check your connection and try again.");
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
 }
 
 // ── Main request function ─────────────────────────────────────────────────────
@@ -116,7 +145,7 @@ export async function apiRequest<T = any>(
     ? endpoint
     : `${API_BASE_URL}${endpoint.startsWith("/") ? endpoint : `/${endpoint}`}`;
 
-  let res = await fetch(url, {
+  let res = await fetchWithTimeout(url, {
     ...options,
     headers,
   });
@@ -130,7 +159,7 @@ export async function apiRequest<T = any>(
     if (newToken) {
       // Retry original request exactly once with the new access token
       headers["Authorization"] = `Bearer ${newToken}`;
-      res = await fetch(url, {
+      res = await fetchWithTimeout(url, {
         ...options,
         headers,
       });

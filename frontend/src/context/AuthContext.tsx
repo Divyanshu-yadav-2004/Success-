@@ -137,11 +137,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
-      log("fetchNestUserProfile", "calling /auth/me");
+      log("fetchNestUserProfile", "calling /auth/me …");
       const data = await apiRequest<NestUser>("/auth/me");
 
       if (data?.id) {
-        log("fetchNestUserProfile", "success, userId=", data.id);
+        log("fetchNestUserProfile", "✓ user loaded, role=", data.role);
         applyNestUser(data);
         return true;
       }
@@ -152,7 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setProfile(null);
       return false;
     } catch (err) {
-      log("fetchNestUserProfile", "error —", (err as Error).message);
+      log("fetchNestUserProfile", "✗ error —", (err as Error).message);
       removeStoredToken();
       setNestUser(null);
       setProfile(null);
@@ -161,40 +161,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // ─────────────────────────────────────────────
-  // On mount: check for OAuth callback tokens in URL,
-  // then fall back to stored JWT.
+  // On mount: restore session from stored JWT.
+  //
+  // OAuth callback tokens are handled exclusively by the
+  // GoogleOAuthCallback component in App.tsx — that component
+  // stores the token and then calls refreshProfile() before
+  // navigating. We deliberately do NOT read URL params here
+  // to avoid race conditions between two code paths both
+  // trying to set the token.
   // ─────────────────────────────────────────────
   useEffect(() => {
     let isMounted = true;
 
     const init = async () => {
-      // ── Handle Google OAuth callback redirect ──────────────────────
-      // Backend redirects to /auth/callback?accessToken=...&refreshToken=...
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlAccessToken = urlParams.get("accessToken");
-      const urlRefreshToken = urlParams.get("refreshToken");
-      const urlError = urlParams.get("error");
+      log("init", "checking stored token");
 
-      if (urlAccessToken) {
-        log("init", "found OAuth callback tokens in URL — storing");
-        setStoredToken(urlAccessToken);
-        if (urlRefreshToken) {
-          localStorage.setItem("refreshToken", urlRefreshToken);
-        }
-        // Clean the URL so tokens don't remain in browser history
-        window.history.replaceState({}, document.title, window.location.pathname);
-      }
-
-      if (urlError) {
-        log("init", "OAuth callback error —", urlError);
-        // Don't throw — just proceed as unauthenticated
-      }
-
-      // ── Check stored JWT (email/password users & page refresh) ─────
       const hasToken = !!getStoredToken();
       if (hasToken && isMounted) {
         const ok = await fetchNestUserProfile();
         log("init", "fetchNestUserProfile =", ok);
+      } else {
+        log("init", "no stored token — unauthenticated");
       }
 
       if (isMounted) {
@@ -218,7 +205,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     password: string,
   ): Promise<{ error: string | null }> => {
     try {
-      log("signIn", "email=", email);
+      log("signIn", "→ email/password login, email=", email);
       const res = await apiRequest<{
         accessToken: string;
         refreshToken: string;
@@ -236,16 +223,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (res.refreshToken) {
         localStorage.setItem("refreshToken", res.refreshToken);
       }
-
-      const ok = await fetchNestUserProfile();
-      if (!ok) {
-        return { error: "Login succeeded but profile could not be loaded" };
-      }
-
-      log("signIn", "success");
+      applyNestUser(res.user);
+      log("signIn", "✓ token stored, user role=", res.user?.role);
       return { error: null };
     } catch (err: any) {
-      log("signIn", "error —", err.message);
+      log("signIn", "✗ error —", err.message);
       return { error: err.message || "Invalid credentials" };
     }
   };
@@ -283,7 +265,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         localStorage.setItem("refreshToken", res.refreshToken);
       }
 
-      await fetchNestUserProfile();
+      // Registration returns the new account profile; welcome email delivery
+      // continues in the backend without holding this transition open.
+      applyNestUser(res.user);
       log("signUp", "success");
       return { error: null };
     } catch (err: any) {
@@ -301,14 +285,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ─────────────────────────────────────────────
   const signInWithGoogle = async (): Promise<{ error: string | null }> => {
     try {
-      log("signInWithGoogle", "redirecting to backend Google OAuth");
-      // Redirect browser to NestJS Google OAuth endpoint
-      // This triggers the Passport Google strategy redirect chain
+      log("signInWithGoogle", "→ redirecting browser to backend Google OAuth");
+      // Full-page redirect — browser goes to NestJS Passport Google endpoint.
+      // NestJS handles: Google consent → callback → find/create user → JWT →
+      //   redirect to /auth/callback?accessToken=...&refreshToken=...
+      // GoogleOAuthCallback component in App.tsx completes the flow.
       window.location.href = `${API_BASE_URL}/auth/google`;
-      // This promise never resolves (page navigates away)
       return { error: null };
     } catch (err: any) {
-      log("signInWithGoogle", "exception —", err?.message);
+      log("signInWithGoogle", "✗ exception —", err?.message);
       return {
         error: err?.message || "An error occurred during Google sign-in.",
       };
@@ -319,10 +304,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // signOut — clear tokens cleanly
   // ─────────────────────────────────────────────
   const signOut = async (): Promise<void> => {
-    log("signOut", "clearing tokens");
+    log("signOut", "clearing tokens and auth state");
     removeStoredToken();
     setNestUser(null);
     setProfile(null);
+    log("signOut", "✓ done");
   };
 
   // ─────────────────────────────────────────────

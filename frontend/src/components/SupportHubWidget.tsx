@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ShieldCheck,
 } from "lucide-react";
+import ChatMessageContent from "@/components/ChatMessageContent";
 
 const WHATSAPP_NUMBER = "917415921990";
 const DEFAULT_WA_MESSAGE =
@@ -312,7 +313,9 @@ export default function SupportHubWidget() {
       {
         id: Date.now().toString(),
         role: "assistant",
-        content: `Chat session reset. How can I assist you with MP Online Services?`,
+        content: `Namaste ${
+          profile?.full_name || "Citizen"
+        }! I am your official Success MP Online AI Assistant. How can I help you with your application or government services today?`,
         timestamp: new Date().toLocaleTimeString([], {
           hour: "2-digit",
           minute: "2-digit",
@@ -409,15 +412,15 @@ export default function SupportHubWidget() {
                 )}
 
                 <div
-                  className={`max-w-[82%] rounded-2xl px-4 py-2.5 text-xs sm:text-sm leading-relaxed shadow-sm ${
+                  className={`max-w-[85%] rounded-2xl px-4 py-3 text-xs sm:text-sm leading-relaxed shadow-sm ${
                     msg.role === "user"
                       ? "bg-blue-600 text-white rounded-br-none"
                       : "bg-white text-slate-800 border border-slate-200/80 rounded-bl-none"
                   }`}
                 >
-                  <div className="whitespace-pre-wrap">{msg.content}</div>
+                  <ChatMessageContent content={msg.content} role={msg.role} />
                   <div
-                    className={`text-[10px] mt-1 text-right ${
+                    className={`text-[10px] mt-1.5 text-right font-medium ${
                       msg.role === "user" ? "text-blue-200" : "text-slate-400"
                     }`}
                   >

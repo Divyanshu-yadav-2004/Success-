@@ -83,8 +83,10 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
+        phone: user.phone,
         fullName: user.profile?.fullName,
         role: user.role.name,
+        profile: user.profile,
       },
       ...tokens,
     };
@@ -121,8 +123,10 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
+        phone: user.phone,
         fullName: user.profile?.fullName,
         role: user.role.name,
+        profile: user.profile,
       },
       ...tokens,
     };
@@ -187,6 +191,18 @@ export class AuthService {
       });
 
       this.logger.log(`Google auth: provisioned new user — ${email}`);
+
+      // Fire-and-forget: send one-time welcome notification & email for new Google user
+      const newUserId = user.id;
+      setImmediate(() => {
+        this.welcomeService
+          .sendWelcomeNotificationIfNeeded(newUserId)
+          .catch((err) =>
+            this.logger.warn(
+              `Google welcome notification failed: ${err.message}`,
+            ),
+          );
+      });
     } else {
       this.logger.log(`Google auth: existing user found — ${email}`);
     }
@@ -205,8 +221,10 @@ export class AuthService {
       user: {
         id: user.id,
         email: user.email,
+        phone: user.phone,
         fullName: user.profile?.fullName || fullName,
         role: user.role.name,
+        profile: user.profile,
       },
       ...tokens,
     };
@@ -235,6 +253,32 @@ export class AuthService {
     } catch {
       throw new UnauthorizedException("Invalid or expired refresh token");
     }
+  }
+
+  /** Profile data is needed only for the explicit /auth/me endpoint. */
+  async getCurrentUserProfile(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        phone: true,
+        role: { select: { name: true } },
+        profile: true,
+      },
+    });
+
+    if (!user || !user.role) {
+      throw new UnauthorizedException("User not active or found");
+    }
+
+    return {
+      id: user.id,
+      email: user.email,
+      phone: user.phone,
+      role: user.role.name,
+      profile: user.profile,
+    };
   }
 
   // ----------------------------------------------------------------

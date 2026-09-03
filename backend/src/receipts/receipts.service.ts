@@ -2,16 +2,73 @@ import { Injectable, NotFoundException } from "@nestjs/common";
 import { PrismaService } from "../prisma/prisma.service";
 import * as PDFDocument from "pdfkit";
 
+// ─── Bounded In-Memory PDF Cache ──────────────────────────────────────────────
+// Stores recently generated receipt PDFs to avoid re-generating on every click.
+// Limits: max 50 entries, TTL 10 minutes. Oldest entries are evicted when full.
+// Only application receipts (non-sensitive structure) are cached. Raw form data
+// is never stored; only the rendered PDF buffer is held in memory.
+const CACHE_MAX = 50;
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+interface CacheEntry {
+  buffer: Buffer;
+  createdAt: number;
+}
+
+const receiptCache = new Map<string, CacheEntry>();
+
+function getCached(key: string): Buffer | null {
+  const entry = receiptCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.createdAt > CACHE_TTL_MS) {
+    receiptCache.delete(key);
+    return null;
+  }
+  return entry.buffer;
+}
+
+function setCache(key: string, buffer: Buffer): void {
+  // Evict the oldest entry if we're at the size limit
+  if (receiptCache.size >= CACHE_MAX) {
+    const oldestKey = receiptCache.keys().next().value;
+    if (oldestKey) receiptCache.delete(oldestKey);
+  }
+  receiptCache.set(key, { buffer, createdAt: Date.now() });
+}
+
+function invalidateCache(key: string): void {
+  receiptCache.delete(key);
+}
+// ──────────────────────────────────────────────────────────────────────────────
+
 @Injectable()
 export class ReceiptsService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Generate (or return cached) PDF receipt for an application.
+   * Cache key includes applicationId + updatedAt timestamp so any status
+   * change automatically invalidates the cache for that application.
+   */
   async generatePdf(applicationId: string): Promise<Buffer> {
     const app = await this.prisma.application.findUnique({
       where: { id: applicationId },
-      include: {
-        service: true,
-        user: { include: { profile: true } },
+      select: {
+        id: true,
+        applicationNo: true,
+        status: true,
+        amount: true,
+        paymentId: true,
+        createdAt: true,
+        updatedAt: true,
+        service: { select: { name: true } },
+        user: {
+          select: {
+            email: true,
+            phone: true,
+            profile: { select: { fullName: true } },
+          },
+        },
       },
     });
 
@@ -19,6 +76,29 @@ export class ReceiptsService {
       throw new NotFoundException(`Application not found: ${applicationId}`);
     }
 
+    // Cache key includes updatedAt so any status update invalidates it
+    const cacheKey = `${applicationId}:${app.updatedAt.getTime()}`;
+    const cached = getCached(cacheKey);
+    if (cached) {
+      return cached;
+    }
+
+    const buffer = await this._renderPdf(app);
+    setCache(cacheKey, buffer);
+    return buffer;
+  }
+
+  /** Invalidate cached receipt when application data changes (e.g. status update). */
+  invalidateReceiptCache(applicationId: string): void {
+    // Remove any cached entry whose key starts with the applicationId
+    for (const key of receiptCache.keys()) {
+      if (key.startsWith(applicationId)) {
+        receiptCache.delete(key);
+      }
+    }
+  }
+
+  private _renderPdf(app: any): Promise<Buffer> {
     return new Promise((resolve, reject) => {
       const doc = new PDFDocument({ margin: 40, size: "A4" });
       const buffers: Buffer[] = [];
@@ -84,7 +164,10 @@ export class ReceiptsService {
       doc.fontSize(9).font("Helvetica").text("Payment Verified Server-Side", 380, y + 35);
 
       // Footer
-      doc.fontSize(8).fillColor("#9CA3AF").text("Computer-generated receipt. Does not require physical signature.", 40, 780, { align: "center" });
+      doc.fontSize(8).fillColor("#9CA3AF").text(
+        "Computer-generated receipt. Does not require physical signature.",
+        40, 780, { align: "center" },
+      );
       doc.text("Success MP Online | support@successmponline.in", 40, 792, { align: "center" });
 
       doc.end();
