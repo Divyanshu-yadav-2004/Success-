@@ -519,11 +519,21 @@ export class MailService implements OnModuleInit {
       }
     }
 
-    this.logger.log(`[email] provider=resend send started to=${maskedRecipient}`);
+    // ── DIAGNOSTIC: log exact sender and masked recipient BEFORE POST ──
+    this.logger.log(
+      `[resend-diag] sendViaResend() CALLED — from="${resendFrom}" to=${maskedRecipient} subject="${String(mailOptions.subject || "")}"`,
+    );
+    this.logger.log(
+      `[resend-diag] POST https://api.resend.com/emails — EXECUTING NOW`,
+    );
 
     // Helper to execute the Resend HTTPS POST
-    const executeResendPost = async (fromAddress: string) => {
+    const executeResendPost = async (fromAddress: string, attempt: string) => {
       payload.from = fromAddress;
+      // Log the exact sender being submitted (never log API key or Authorization header)
+      this.logger.log(
+        `[resend-diag] attempt=${attempt} submitting from="${fromAddress}" to=${maskedRecipient}`,
+      );
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -534,26 +544,52 @@ export class MailService implements OnModuleInit {
       });
       const status = res.status;
       const data: any = await res.json().catch(() => ({}));
+
+      // ── DIAGNOSTIC: log full safe Resend response (no secrets) ──
+      const safeBody = {
+        id: data?.id ?? null,
+        name: data?.name ?? null,
+        message: data?.message ?? null,
+        statusCode: data?.statusCode ?? null,
+        errorName: data?.error?.name ?? null,
+        errorMessage: data?.error?.message ?? null,
+      };
+      this.logger.log(
+        `[resend-diag] attempt=${attempt} HTTP status=${status} responseBody=${JSON.stringify(safeBody)}`,
+      );
+      if (data?.id) {
+        this.logger.log(
+          `[resend-diag] attempt=${attempt} Resend message ID=${data.id} — ACCEPTED`,
+        );
+      } else {
+        this.logger.warn(
+          `[resend-diag] attempt=${attempt} NO message ID returned — status=${status} name="${safeBody.name}" message="${safeBody.message}"`,
+        );
+      }
+
       return { res, status, data };
     };
 
     try {
-      let { res, status, data } = await executeResendPost(resendFrom);
+      let { res, status, data } = await executeResendPost(resendFrom, "primary");
       this.logger.log(`[email] provider=resend response status=${status}`);
 
-      // If domain verification error on custom fromAddress, attempt fallback to onboarding@resend.dev
+      // ── BROADENED domain-verification check ──
+      // Trigger sandbox fallback on ANY 403 (Resend uses 403 for unverified sender domains)
+      // OR 422 validation_error that mentions domain/verification.
       const isDomainVerificationError =
-        (status === 403 || status === 422) &&
-        (data?.message?.toLowerCase().includes("domain") ||
-          data?.message?.toLowerCase().includes("not verified") ||
-          data?.name === "validation_error");
+        status === 403 ||
+        ((status === 403 || status === 422) &&
+          (data?.message?.toLowerCase().includes("domain") ||
+            data?.message?.toLowerCase().includes("not verified") ||
+            data?.name === "validation_error"));
 
       if (!res.ok && isDomainVerificationError && !resendFrom.includes("onboarding@resend.dev")) {
         const sandboxFrom = "Success MP Online <onboarding@resend.dev>";
         this.logger.warn(
-          `[email] provider=resend domain not verified for "${resendFrom}". Retrying with sandbox sender "${sandboxFrom}"...`,
+          `[email] provider=resend domain not verified for "${resendFrom}" (HTTP ${status}). Retrying with sandbox sender "${sandboxFrom}"...`,
         );
-        const retry = await executeResendPost(sandboxFrom);
+        const retry = await executeResendPost(sandboxFrom, "sandbox-fallback");
         res = retry.res;
         status = retry.status;
         data = retry.data;
