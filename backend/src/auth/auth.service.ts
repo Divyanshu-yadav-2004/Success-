@@ -325,8 +325,9 @@ export class AuthService {
       "If an account exists for this email, you'll receive a password reset link shortly.";
 
     try {
-      const user = await this.prisma.user.findUnique({
-        where: { email },
+      const normalizedEmail = email.trim().toLowerCase();
+      const user = await this.prisma.user.findFirst({
+        where: { email: { equals: normalizedEmail, mode: "insensitive" } },
         include: { profile: true },
       });
 
@@ -376,21 +377,23 @@ export class AuthService {
       const supportPhone =
         this.configService.get<string>("SUPPORT_PHONE") || "7415921990";
 
-      // Fire-and-forget: don't block the response on email delivery
-      this.mailService
-        .sendPasswordResetEmailTo(email, {
-          userName,
-          resetUrl,
-          supportEmail,
-          supportPhone,
-        })
-        .catch((err) =>
-          this.logger.error(`forgotPassword: email send error — ${err?.message}`),
-        );
+      // Await email delivery to guarantee completion within request lifecycle
+      const sendResult = await this.mailService.sendPasswordResetEmailTo(user.email, {
+        userName,
+        resetUrl,
+        supportEmail,
+        supportPhone,
+      });
 
-      this.logger.log(
-        `forgotPassword: reset token created for userId=${user.id} — email dispatched`,
-      );
+      if (sendResult.success) {
+        this.logger.log(
+          `forgotPassword: reset email sent successfully to userId=${user.id} (messageId: ${sendResult.messageId})`,
+        );
+      } else {
+        this.logger.error(
+          `forgotPassword: email delivery failed for userId=${user.id}: ${sendResult.error} { code: "${sendResult.code}" }`,
+        );
+      }
     } catch (err: any) {
       // Log the error internally but still return the safe message
       this.logger.error(`forgotPassword: unexpected error — ${err?.message}`);

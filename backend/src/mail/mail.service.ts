@@ -474,41 +474,56 @@ export class MailService implements OnModuleInit {
       resendFrom = mailOptions.from;
     }
 
+    // Replace inline CID logo with public HTTPS logo URL for Resend
+    let htmlContent = mailOptions.html as string | undefined;
+    if (typeof htmlContent === "string" && htmlContent.includes(`cid:${LOGO_CID}`)) {
+      const publicLogoUrl = this.frontendUrl
+        ? `${this.frontendUrl}/logo.png`
+        : "https://intelligent-determination-production-4296.up.railway.app/logo.png";
+      htmlContent = htmlContent.split(`cid:${LOGO_CID}`).join(publicLogoUrl);
+    }
+
+    // Build payload for Resend
     const payload: any = {
       from: resendFrom,
       to,
       subject: mailOptions.subject,
-      html: mailOptions.html,
+      html: htmlContent,
       text: mailOptions.text,
     };
 
+    // Filter out CID logo attachment since it's already replaced by public HTTPS URL.
+    // Real file attachments are formatted strictly per Resend API schema: { filename, content }.
+    // NEVER pass `id` or `content_type` unless `id` is a valid UUID, as Resend validates `id` as UUID.
     if (Array.isArray(mailOptions.attachments) && mailOptions.attachments.length > 0) {
-      payload.attachments = mailOptions.attachments.map((att: any) => {
-        let contentBase64 = "";
-        if (Buffer.isBuffer(att.content)) {
-          contentBase64 = att.content.toString("base64");
-        } else if (typeof att.content === "string") {
-          contentBase64 = Buffer.from(
-            att.content.replace(/^data:image\/[a-zA-Z]+;base64,/, ""),
-            "base64",
-          ).toString("base64");
-        }
-        const item: any = {
-          filename: att.filename || "attachment.png",
-          content: contentBase64,
-        };
-        if (att.cid) {
-          item.id = att.cid;
-        }
-        if (att.contentType) {
-          item.content_type = att.contentType;
-        }
-        return item;
-      });
+      const realAttachments = mailOptions.attachments.filter(
+        (att: any) => att.cid !== LOGO_CID && att.id !== LOGO_CID,
+      );
+
+      if (realAttachments.length > 0) {
+        payload.attachments = realAttachments.map((att: any) => {
+          let contentBase64 = "";
+          if (Buffer.isBuffer(att.content)) {
+            contentBase64 = att.content.toString("base64");
+          } else if (typeof att.content === "string") {
+            contentBase64 = Buffer.from(
+              att.content.replace(/^data:[^;]+;base64,/, ""),
+              "base64",
+            ).toString("base64");
+          }
+          return {
+            filename: att.filename || "attachment.png",
+            content: contentBase64,
+          };
+        });
+      }
     }
 
-    try {
-      this.logger.log(`[email] sending message via Resend HTTPS API (port 443) from="${resendFrom}" to=${maskedRecipient}`);
+    this.logger.log(`[email] provider=resend send started to=${maskedRecipient}`);
+
+    // Helper to execute the Resend HTTPS POST
+    const executeResendPost = async (fromAddress: string) => {
+      payload.from = fromAddress;
       const res = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: {
@@ -517,29 +532,53 @@ export class MailService implements OnModuleInit {
         },
         body: JSON.stringify(payload),
       });
-
+      const status = res.status;
       const data: any = await res.json().catch(() => ({}));
+      return { res, status, data };
+    };
+
+    try {
+      let { res, status, data } = await executeResendPost(resendFrom);
+      this.logger.log(`[email] provider=resend response status=${status}`);
+
+      // If domain verification error on custom fromAddress, attempt fallback to onboarding@resend.dev
+      const isDomainVerificationError =
+        (status === 403 || status === 422) &&
+        (data?.message?.toLowerCase().includes("domain") ||
+          data?.message?.toLowerCase().includes("not verified") ||
+          data?.name === "validation_error");
+
+      if (!res.ok && isDomainVerificationError && !resendFrom.includes("onboarding@resend.dev")) {
+        const sandboxFrom = "Success MP Online <onboarding@resend.dev>";
+        this.logger.warn(
+          `[email] provider=resend domain not verified for "${resendFrom}". Retrying with sandbox sender "${sandboxFrom}"...`,
+        );
+        const retry = await executeResendPost(sandboxFrom);
+        res = retry.res;
+        status = retry.status;
+        data = retry.data;
+        this.logger.log(`[email] provider=resend response status=${status} (sandbox fallback)`);
+      }
 
       if (res.ok && data?.id) {
-        this.logger.log(
-          `[email] message accepted by Resend API (messageId: ${data.id})`,
-        );
+        this.logger.log(`[email] provider=resend send accepted id=${data.id}`);
 
         if (logRecordId) {
           await this.prisma.notificationLog
             .update({
               where: { id: logRecordId },
-              data: { status: NotificationStatus.SENT, sentAt: new Date() },
+              data: { status: NotificationStatus.SENT, sentAt: new Date(), error: null },
             })
             .catch(() => {});
         }
 
         return { success: true, messageId: data.id };
       } else {
+        const safeErrorCode = data?.name || data?.error?.name || `HTTP_${status}`;
         const errorMsg =
-          data?.message || data?.error?.message || `Resend API returned status ${res.status}`;
+          data?.message || data?.error?.message || `Resend API error (status ${status})`;
         this.logger.error(
-          `[email] Resend API error to ${maskedRecipient}: ${errorMsg}`,
+          `[email] provider=resend send failed code=${safeErrorCode} status=${status} message="${errorMsg}"`,
         );
 
         if (logRecordId) {
@@ -551,13 +590,11 @@ export class MailService implements OnModuleInit {
             .catch(() => {});
         }
 
-        return { success: false, error: errorMsg, code: "ERESEND_API_ERROR" };
+        return { success: false, error: errorMsg, code: safeErrorCode };
       }
     } catch (err: any) {
       const errorMsg = err.message || String(err);
-      this.logger.error(
-        `[email] Resend network error to ${maskedRecipient}: ${errorMsg}`,
-      );
+      this.logger.error(`[email] provider=resend send failed code=ENETWORK message="${errorMsg}"`);
 
       if (logRecordId) {
         await this.prisma.notificationLog
@@ -568,7 +605,7 @@ export class MailService implements OnModuleInit {
           .catch(() => {});
       }
 
-      return { success: false, error: errorMsg, code: "ERESEND_NETWORK_ERROR" };
+      return { success: false, error: errorMsg, code: "ENETWORK" };
     }
   }
 
