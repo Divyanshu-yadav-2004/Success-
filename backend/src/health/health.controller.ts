@@ -51,4 +51,10 @@ export class HealthController {
       },
     };
   }
+
+  @Get("smtp-diagnostic")
+  @ApiOperation({ summary: "Run live network reachability diagnostic for SMTP ports and HTTPS" })
+  async runSmtpDiagnostic() {
+    return this.mailService.runDiagnostic();
+  }
 }

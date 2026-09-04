@@ -33,6 +33,8 @@ async function bootstrap() {
   }
 
   const emailEnvKeys = [
+    "RESEND_API_KEY",
+    "RESEND_FROM",
     "EMAIL_HOST",
     "EMAIL_PORT",
     "EMAIL_USER",
@@ -59,6 +61,8 @@ async function bootstrap() {
     const isPresent = !!(val && val.trim() !== "" && !val.includes("YOUR_") && !val.includes("placeholder") && !val.toLowerCase().includes("dummy"));
     logger.log(`ENV [${key}]: ${isPresent ? "✓ PRESENT" : "○ NOT SET"}`);
   }
+  const hasResend = !!(process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.trim() !== "" && !process.env.RESEND_API_KEY.includes("placeholder"));
+  logger.log(`Active Email Provider Target: ${hasResend ? "Resend HTTPS API (port 443 — prioritized)" : "SMTP"}`);
   logger.log("---------------------------------------");
 
   const app = await NestFactory.create(AppModule);
