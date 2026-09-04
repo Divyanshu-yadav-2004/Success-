@@ -59,38 +59,35 @@ export class AuthController {
   @UseGuards(GoogleAuthGuard)
   @ApiExcludeEndpoint()
   async googleAuthCallback(@Req() req: any, @Res() res: Response) {
-    // 1. Check configured FRONTEND_URL env var
-    // 2. Check OAuth state parameter (passed by frontend and returned by Google)
-    // 3. In dev, fall back to http://localhost:5173
     const configuredFrontend = this.configService.get<string>("FRONTEND_URL")?.trim();
     const stateOrigin = req.query?.state as string | undefined;
 
     let frontendUrl: string | undefined;
 
-    if (configuredFrontend && !configuredFrontend.includes("localhost")) {
-      frontendUrl = configuredFrontend.replace(/\/$/, "");
-    } else if (stateOrigin && (stateOrigin.startsWith("http://") || stateOrigin.startsWith("https://"))) {
+    // 1. If state parameter is a valid HTTP/HTTPS origin, prioritize it
+    //    (Ensures browser returns to the exact frontend domain that initiated login)
+    if (stateOrigin && (stateOrigin.startsWith("http://") || stateOrigin.startsWith("https://"))) {
       try {
-        frontendUrl = new URL(stateOrigin).origin;
+        const parsed = new URL(stateOrigin);
+        if (!parsed.hostname.includes("success-production-f97a")) {
+          frontendUrl = parsed.origin;
+        }
       } catch {
         // ignore malformed state
       }
-    } else if (configuredFrontend) {
+    }
+
+    // 2. Fall back to configured FRONTEND_URL if not pointing to backend
+    if (!frontendUrl && configuredFrontend && !configuredFrontend.includes("success-production-f97a")) {
       frontendUrl = configuredFrontend.replace(/\/$/, "");
     }
 
+    // 3. Fall back to known production frontend if unconfigured or pointing to backend
     if (!frontendUrl) {
-      if (process.env.NODE_ENV !== "production") {
-        frontendUrl = "http://localhost:5173";
+      if (process.env.NODE_ENV === "production") {
+        frontendUrl = "https://intelligent-determination-production-4296.up.railway.app";
       } else {
-        this.logger.error(
-          "FATAL: FRONTEND_URL is not configured on the production backend and no valid state origin was received.",
-        );
-        return res
-          .status(500)
-          .send(
-            "Configuration Error: FRONTEND_URL environment variable is missing on Railway backend.",
-          );
+        frontendUrl = "http://localhost:5173";
       }
     }
 

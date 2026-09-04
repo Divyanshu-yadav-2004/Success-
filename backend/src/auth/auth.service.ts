@@ -464,12 +464,17 @@ export class AuthService {
     role: string,
   ) {
     const payload = { sub: userId, email, role };
-    const accessSecret =
+    const rawAccessSecret =
       this.configService.get<string>("JWT_ACCESS_SECRET") ||
+      process.env.JWT_ACCESS_SECRET ||
       "super_secret_access_key_success_mp_online_2026";
-    const refreshSecret =
+    const accessSecret = rawAccessSecret.trim().replace(/^["']|["']$/g, "");
+
+    const rawRefreshSecret =
       this.configService.get<string>("JWT_REFRESH_SECRET") ||
+      process.env.JWT_REFRESH_SECRET ||
       "super_secret_refresh_key_success_mp_online_2026";
+    const refreshSecret = rawRefreshSecret.trim().replace(/^["']|["']$/g, "");
 
     const accessToken = this.jwtService.sign(payload, {
       secret: accessSecret,

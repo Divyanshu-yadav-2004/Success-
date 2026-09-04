@@ -76,10 +76,65 @@ interface AuthContextValue {
   updateProfile: (
     updates: Partial<Profile>,
   ) => Promise<{ error: string | null }>;
-  refreshProfile: () => Promise<void>;
+  refreshProfile: (tokenOverride?: string) => Promise<boolean>;
   // Legacy shape compatibility
   session: { user: NestUser } | null;
   user: NestUser | null;
+}
+
+// ─────────────────────────────────────────────
+// URL Token Extraction Helper
+// Reads accessToken / refreshToken from query string or hash fragment
+// ─────────────────────────────────────────────
+export function extractTokensFromUrl(): {
+  accessToken: string | null;
+  refreshToken: string | null;
+  error: string | null;
+  message: string | null;
+} {
+  try {
+    const searchParams = new URLSearchParams(window.location.search);
+    const hashString = window.location.hash.startsWith("#")
+      ? window.location.hash.substring(1)
+      : "";
+    const hashParams = new URLSearchParams(hashString);
+
+    const accessToken =
+      searchParams.get("accessToken") ||
+      searchParams.get("access_token") ||
+      hashParams.get("accessToken") ||
+      hashParams.get("access_token");
+
+    const refreshToken =
+      searchParams.get("refreshToken") ||
+      searchParams.get("refresh_token") ||
+      hashParams.get("refreshToken") ||
+      hashParams.get("refresh_token");
+
+    const error = searchParams.get("error") || hashParams.get("error");
+    const message = searchParams.get("message") || hashParams.get("message");
+
+    return {
+      accessToken:
+        accessToken &&
+        accessToken.trim() !== "" &&
+        accessToken !== "undefined" &&
+        accessToken !== "null"
+          ? accessToken.trim()
+          : null,
+      refreshToken:
+        refreshToken &&
+        refreshToken.trim() !== "" &&
+        refreshToken !== "undefined" &&
+        refreshToken !== "null"
+          ? refreshToken.trim()
+          : null,
+      error: error && error.trim() !== "" ? error.trim() : null,
+      message: message && message.trim() !== "" ? message.trim() : null,
+    };
+  } catch {
+    return { accessToken: null, refreshToken: null, error: null, message: null };
+  }
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -120,11 +175,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // ─────────────────────────────────────────────
-  // Fetch NestJS profile with stored JWT
+  // Fetch NestJS profile with stored or provided JWT
   // Source of truth: NestJS /auth/me → Prisma/PostgreSQL
   // ─────────────────────────────────────────────
-  const fetchNestUserProfile = async (): Promise<boolean> => {
-    const token = getStoredToken();
+  const fetchNestUserProfile = async (tokenOverride?: string): Promise<boolean> => {
+    const token = tokenOverride || getStoredToken();
     if (!token) {
       log("fetchNestUserProfile", "no stored token");
       setNestUser(null);
@@ -134,7 +189,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       log("fetchNestUserProfile", "calling /auth/me …");
-      const data = await apiRequest<NestUser>("/auth/me");
+      const data = await apiRequest<NestUser>("/auth/me", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (data?.id) {
         log("fetchNestUserProfile", "✓ user loaded, role=", data.role);
@@ -157,27 +216,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // ─────────────────────────────────────────────
-  // On mount: restore session from stored JWT.
+  // On mount: restore session.
   //
-  // OAuth callback tokens are handled exclusively by the
-  // GoogleOAuthCallback component in App.tsx — that component
-  // stores the token and then calls refreshProfile() before
-  // navigating. We deliberately do NOT read URL params here
-  // to avoid race conditions between two code paths both
-  // trying to set the token.
+  // Check for tokens in the URL first (Google OAuth callback redirect).
+  // If present, store them immediately BEFORE firing any network calls
+  // to prevent race conditions or calling /auth/me with stale tokens.
   // ─────────────────────────────────────────────
   useEffect(() => {
     let isMounted = true;
 
     const init = async () => {
-      log("init", "checking stored token");
+      log("init", "checking url parameters and stored token");
 
-      const hasToken = !!getStoredToken();
-      if (hasToken && isMounted) {
-        const ok = await fetchNestUserProfile();
-        log("init", "fetchNestUserProfile =", ok);
+      const { accessToken: urlAccessToken, refreshToken: urlRefreshToken, error: urlError } =
+        extractTokensFromUrl();
+
+      if (urlError) {
+        log("init", "OAuth error in URL — clearing tokens");
+        removeStoredToken();
+      } else if (urlAccessToken) {
+        log("init", "found OAuth tokens in URL — storing immediately before any API call");
+        setStoredToken(urlAccessToken);
+        if (urlRefreshToken) {
+          localStorage.setItem("refreshToken", urlRefreshToken);
+        }
+
+        if (isMounted) {
+          const ok = await fetchNestUserProfile(urlAccessToken);
+          log("init", "fetchNestUserProfile with url token =", ok);
+        }
       } else {
-        log("init", "no stored token — unauthenticated");
+        const stored = getStoredToken();
+        if (stored && isMounted) {
+          const ok = await fetchNestUserProfile(stored);
+          log("init", "fetchNestUserProfile with stored token =", ok);
+        } else {
+          log("init", "no stored token — unauthenticated");
+        }
       }
 
       if (isMounted) {
@@ -319,8 +394,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { error: null };
   };
 
-  const refreshProfile = async (): Promise<void> => {
-    await fetchNestUserProfile();
+  const refreshProfile = async (tokenOverride?: string): Promise<boolean> => {
+    return await fetchNestUserProfile(tokenOverride);
   };
 
   const isAdmin = profile?.role === "admin";

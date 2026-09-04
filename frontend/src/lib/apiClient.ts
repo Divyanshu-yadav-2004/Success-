@@ -91,16 +91,34 @@ function isAuthExcluded(endpoint: string): boolean {
 // ── Token storage ────────────────────────────────────────────────────────────
 
 export function getStoredToken(): string | null {
-  return localStorage.getItem("accessToken");
+  try {
+    const token = localStorage.getItem("accessToken");
+    if (!token || token === "undefined" || token === "null" || token.trim() === "") {
+      return null;
+    }
+    return token.trim();
+  } catch {
+    return null;
+  }
 }
 
 export function setStoredToken(token: string) {
-  localStorage.setItem("accessToken", token);
+  try {
+    if (token && token !== "undefined" && token !== "null" && token.trim() !== "") {
+      localStorage.setItem("accessToken", token.trim());
+    }
+  } catch {
+    // ignore storage errors
+  }
 }
 
 export function removeStoredToken() {
-  localStorage.removeItem("accessToken");
-  localStorage.removeItem("refreshToken");
+  try {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+  } catch {
+    // ignore storage errors
+  }
 }
 
 // ── Internal: attempt a single token refresh ─────────────────────────────────
@@ -179,7 +197,7 @@ export async function apiRequest<T = any>(
     ...(options.headers as Record<string, string>),
   };
 
-  if (token) {
+  if (token && !headers["Authorization"]) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 

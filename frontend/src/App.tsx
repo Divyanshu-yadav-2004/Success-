@@ -24,9 +24,8 @@ import {
   Route,
   Navigate,
   useNavigate,
-  useSearchParams,
 } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { AuthProvider, useAuth, extractTokensFromUrl } from "@/context/AuthContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 import { lazy, Suspense, useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
@@ -110,18 +109,8 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 // ── GoogleOAuthCallback ───────────────────────────────────────────────────────
 // Handles the redirect from the NestJS backend after Google authentication:
 //   Backend → /auth/callback?accessToken=...&refreshToken=...
-//
-// Fix summary:
-//  [A] getStoredToken is now imported (was missing — caused runtime error).
-//  [B] We ONLY accept the token from URL params — we do NOT fall back to
-//      getStoredToken(). A stale stored token caused the callback to think
-//      login succeeded when it hadn't.
-//  [C] We await refreshProfile() before navigating. Previously navigate ran
-//      in .finally(), which fires before React state updates settle — the
-//      ProtectedRoute then saw isAuthenticated=false and looped back to /auth.
 function GoogleOAuthCallback() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const { refreshProfile } = useAuth();
   const [statusMessage, setStatusMessage] = useState("Completing sign-in…");
 
@@ -134,11 +123,9 @@ function GoogleOAuthCallback() {
     let cancelled = false;
 
     async function handleCallback() {
-      // [B] Read ONLY from URL params — never fall back to stored token
-      const urlAccessToken = searchParams.get("accessToken");
-      const urlRefreshToken = searchParams.get("refreshToken");
-      const errorParam = searchParams.get("error");
-      const message = searchParams.get("message");
+      // Extract from URL (query or hash)
+      const { accessToken: urlAccessToken, refreshToken: urlRefreshToken, error: errorParam, message } =
+        extractTokensFromUrl();
 
       log("params", `accessToken=${urlAccessToken ? "[REDACTED]" : "null"} error=${errorParam}`);
 
@@ -146,7 +133,6 @@ function GoogleOAuthCallback() {
       if (errorParam) {
         log("error from backend", errorParam);
         removeStoredToken();
-        localStorage.removeItem("refreshToken");
         const errorMsg = message || "Google sign-in failed. Please try again.";
         if (!cancelled) {
           navigate(`/auth?oauthError=${encodeURIComponent(errorMsg)}`, { replace: true });
@@ -154,11 +140,13 @@ function GoogleOAuthCallback() {
         return;
       }
 
-      // ── No access token in URL ─────────────────────────────────────────────
-      if (!urlAccessToken) {
-        log("no accessToken in URL — redirecting to /auth with error");
+      // Check URL tokens or stored token
+      const token = urlAccessToken || getStoredToken();
+
+      // ── No access token in URL or storage ──────────────────────────────────
+      if (!token) {
+        log("no accessToken in URL or storage — redirecting to /auth with error");
         removeStoredToken();
-        localStorage.removeItem("refreshToken");
         const errorMsg = message || "Google sign-in failed. No token received.";
         if (!cancelled) {
           navigate(`/auth?oauthError=${encodeURIComponent(errorMsg)}`, { replace: true });
@@ -168,25 +156,30 @@ function GoogleOAuthCallback() {
 
       // ── Store tokens ───────────────────────────────────────────────────────
       log("storing tokens from URL");
-      setStoredToken(urlAccessToken);
+      if (urlAccessToken) {
+        setStoredToken(urlAccessToken);
+      }
       if (urlRefreshToken) {
         localStorage.setItem("refreshToken", urlRefreshToken);
       }
 
-      // ── [C] Await refreshProfile so nestUser state is set BEFORE navigate ──
+      // ── Await refreshProfile so nestUser state is set BEFORE navigate ──────
       try {
         if (!cancelled) setStatusMessage("Fetching your profile…");
         log("calling refreshProfile");
-        await refreshProfile();
-        log("refreshProfile complete — navigating to dashboard");
-        if (!cancelled) {
-          navigate("/", { replace: true });
+        const ok = await refreshProfile(token);
+        if (ok) {
+          log("refreshProfile complete — navigating to dashboard");
+          if (!cancelled) {
+            navigate("/", { replace: true });
+          }
+        } else {
+          throw new Error("Profile verification returned false");
         }
       } catch (err: any) {
         log("refreshProfile failed", err?.message);
         // Profile fetch failed — clear tokens, send back to login
         removeStoredToken();
-        localStorage.removeItem("refreshToken");
         if (!cancelled) {
           navigate(
             `/auth?oauthError=${encodeURIComponent("Sign-in succeeded but profile load failed. Please try again.")}`,

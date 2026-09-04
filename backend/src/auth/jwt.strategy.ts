@@ -10,10 +10,16 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private configService: ConfigService,
     private prisma: PrismaService,
   ) {
+    const secret = (
+      configService.get<string>("JWT_ACCESS_SECRET") ||
+      process.env.JWT_ACCESS_SECRET ||
+      "super_secret_access_key_success_mp_online_2026"
+    ).trim().replace(/^["']|["']$/g, "");
+
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
-      secretOrKey: configService.get<string>("JWT_ACCESS_SECRET") || "super_secret_access_key_success_mp_online_2026",
+      secretOrKey: secret,
     });
   }
 
