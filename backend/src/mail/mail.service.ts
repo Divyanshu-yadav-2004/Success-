@@ -32,10 +32,13 @@ export interface SendConfirmationEmailOptions {
 export interface SmtpDiagnosticStatus {
   configured: boolean;
   status: "up" | "down" | "unverified" | "not_configured";
-  provider?: "resend" | "smtp" | "none";
+  provider?: "gmail-api" | "resend" | "smtp" | "none";
+  transport?: "https" | "smtp" | "none";
   host?: string;
   port?: number;
   secure?: boolean;
+  sender?: string;
+  authMethod?: "oauth2_refresh_token" | "service_account";
   error?: string | null;
 }
 
@@ -49,7 +52,7 @@ export class MailService implements OnModuleInit {
   private readonly isProduction: boolean;
   private readonly isSmtpConfigured: boolean;
   private readonly resendApiKey: string;
-  private readonly provider: "resend" | "smtp" | "none";
+  private readonly provider: "gmail-api" | "resend" | "smtp" | "none";
   private readonly host: string;
   private readonly port: number;
   private readonly user: string;
@@ -57,13 +60,80 @@ export class MailService implements OnModuleInit {
   private smtpVerified: boolean = false;
   private smtpLastError: string | null = null;
 
+  // Gmail API configuration (HTTPS / 443)
+  private readonly gmailSenderEmail: string;
+  private readonly gmailClientId: string;
+  private readonly gmailClientSecret: string;
+  private readonly gmailRefreshToken: string;
+  private readonly googleSaClientEmail: string;
+  private readonly googleSaPrivateKey: string;
+  private readonly isGmailApiConfigured: boolean;
+  private readonly gmailAuthMethod: "oauth2_refresh_token" | "service_account" | "none";
+  private gmailCachedAccessToken: string | null = null;
+  private gmailTokenExpiresAt: number = 0;
+
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
     this.isProduction = process.env.NODE_ENV === "production";
 
-    // 1. Check RESEND_API_KEY first - Takes absolute priority in production & staging
+    // 1. Gmail API sender configuration (Takes ABSOLUTE PRIORITY in production & staging)
+    const rawSenderEmail =
+      this.configService.get<string>("GMAIL_SENDER_EMAIL") ||
+      this.configService.get<string>("EMAIL_USER") ||
+      process.env.GMAIL_SENDER_EMAIL ||
+      process.env.EMAIL_USER;
+    this.gmailSenderEmail = rawSenderEmail ? rawSenderEmail.trim() : "";
+
+    // Dedicated sender OAuth2 refresh token credentials (preferred simplicity)
+    const rawGmailClientId =
+      this.configService.get<string>("GMAIL_CLIENT_ID") ||
+      process.env.GMAIL_CLIENT_ID;
+    this.gmailClientId = rawGmailClientId ? rawGmailClientId.trim() : "";
+
+    const rawGmailClientSecret =
+      this.configService.get<string>("GMAIL_CLIENT_SECRET") ||
+      process.env.GMAIL_CLIENT_SECRET;
+    this.gmailClientSecret = rawGmailClientSecret ? rawGmailClientSecret.trim() : "";
+
+    const rawGmailRefreshToken =
+      this.configService.get<string>("GMAIL_REFRESH_TOKEN") ||
+      process.env.GMAIL_REFRESH_TOKEN;
+    this.gmailRefreshToken = rawGmailRefreshToken ? rawGmailRefreshToken.trim() : "";
+
+    // Google Workspace Service Account with Domain-Wide Delegation credentials (alternative)
+    const rawSaEmail =
+      this.configService.get<string>("GOOGLE_SERVICE_ACCOUNT_EMAIL") ||
+      process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    this.googleSaClientEmail = rawSaEmail ? rawSaEmail.trim() : "";
+
+    const rawSaKey =
+      this.configService.get<string>("GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY") ||
+      process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
+    this.googleSaPrivateKey = rawSaKey ? rawSaKey.replace(/\\n/g, "\n").trim() : "";
+
+    const isOAuth2Configured = Boolean(
+      this.gmailClientId &&
+      this.gmailClientSecret &&
+      this.gmailRefreshToken &&
+      this.gmailSenderEmail
+    );
+
+    const isSaConfigured = Boolean(
+      this.googleSaClientEmail &&
+      this.googleSaPrivateKey &&
+      this.gmailSenderEmail
+    );
+
+    this.isGmailApiConfigured = isOAuth2Configured || isSaConfigured;
+    this.gmailAuthMethod = isOAuth2Configured
+      ? "oauth2_refresh_token"
+      : isSaConfigured
+        ? "service_account"
+        : "none";
+
+    // 2. Check RESEND_API_KEY (secondary fallback)
     const rawResendKey =
       this.configService.get<string>("RESEND_API_KEY") ||
       process.env.RESEND_API_KEY;
@@ -76,6 +146,7 @@ export class MailService implements OnModuleInit {
     );
     this.resendApiKey = isResendConfigured ? cleanResendKey : "";
 
+    // 3. SMTP configuration (local dev fallback only; blocked by Railway in production)
     const rawHost = this.configService.get<string>("EMAIL_HOST");
     const rawPort = this.configService.get<string>("EMAIL_PORT");
     const rawUser = this.configService.get<string>("EMAIL_USER");
@@ -99,11 +170,11 @@ export class MailService implements OnModuleInit {
     const frontendUrl = rawFrontendUrl ? rawFrontendUrl.trim() : "";
 
     this.fromAddress =
-      from || (this.user ? `Success MP Online <${this.user}>` : "Success MP Online <noreply@successmponline.in>");
+      from || (this.user ? `Success MP Online <${this.user}>` : "Success MP Online <helpSuccessMPonline@gmail.com>");
     this.frontendUrl =
       frontendUrl || (this.isProduction ? "" : "http://localhost:5173");
 
-    // 2. Configure RESEND_FROM sender
+    // Configure RESEND_FROM sender
     const rawResendFrom =
       this.configService.get<string>("RESEND_FROM") ||
       process.env.RESEND_FROM;
@@ -125,21 +196,23 @@ export class MailService implements OnModuleInit {
     );
 
     // Safe metadata logging (secrets NEVER logged)
+    this.logger.log(`[MailService] GMAIL_API configured: ${this.isGmailApiConfigured} (method: ${this.gmailAuthMethod}, sender: ${this.maskEmail(this.gmailSenderEmail)})`);
     this.logger.log(`[MailService] RESEND_API_KEY configured: ${Boolean(this.resendApiKey)}`);
-    this.logger.log(`[MailService] RESEND_FROM configured: ${this.resendFrom}`);
     this.logger.log(`[MailService] EMAIL_HOST configured: ${Boolean(this.host)} (${this.host || "none"})`);
-    this.logger.log(`[MailService] EMAIL_PORT configured: ${Boolean(portStr)} (${this.port})`);
     this.logger.log(`[MailService] EMAIL_USER configured: ${Boolean(this.user)} (${this.maskEmail(this.user)})`);
-    this.logger.log(`[MailService] EMAIL_PASSWORD configured: ${Boolean(this.pass)}`);
-    this.logger.log(`[MailService] EMAIL_FROM configured: ${Boolean(from)}`);
 
-    // 3. Deterministic provider selection:
-    // RESEND_API_KEY present -> Resend HTTPS API (port 443)
-    // Otherwise -> SMTP
-    if (this.resendApiKey) {
+    // 4. Deterministic provider selection:
+    // GMAIL_API configured -> GMAIL_API (HTTPS port 443 — top priority, solves Railway SMTP block & Resend domain check)
+    // RESEND_API_KEY configured -> Resend HTTPS API (port 443)
+    // Otherwise -> SMTP / jsonTransport
+    if (this.isGmailApiConfigured) {
+      this.provider = "gmail-api";
+      this.transporter = null;
+      this.logger.log(`[MailService] Active email provider: GMAIL_API HTTPS REST API (port 443, authMethod: ${this.gmailAuthMethod})`);
+    } else if (this.resendApiKey) {
       this.provider = "resend";
-      this.transporter = null; // NEVER initialize SMTP transporter when Resend is active
-      this.logger.log("[MailService] Active email provider: Resend HTTPS API (port 443 — prioritized, Gmail SMTP disabled)");
+      this.transporter = null;
+      this.logger.log("[MailService] Active email provider: Resend HTTPS API (port 443)");
     } else if (this.isSmtpConfigured) {
       this.provider = "smtp";
       const isSecure = this.port === 465;
@@ -161,7 +234,7 @@ export class MailService implements OnModuleInit {
       if (this.isProduction) {
         this.transporter = null;
         this.logger.error(
-          "[MailService] FATAL: Neither RESEND_API_KEY nor valid SMTP credentials are configured. Set RESEND_API_KEY (recommended on Railway) or SMTP settings in Railway variables.",
+          "[MailService] FATAL: No valid production email credentials configured. Configure GMAIL_API credentials in Railway environment variables.",
         );
       } else {
         this.transporter = nodemailer.createTransport({
@@ -172,10 +245,27 @@ export class MailService implements OnModuleInit {
         );
       }
     }
+
+    // Structured provider selection diagnostic (safe — booleans only, no secrets)
+    this.logger.log(
+      `[email] provider selection:\n  gmail variables configured = ${this.isGmailApiConfigured}\n  resend configured = ${Boolean(this.resendApiKey)}\n  smtp configured = ${this.isSmtpConfigured}\n  active provider = ${this.provider}`
+    );
   }
 
   async onModuleInit() {
-    if (this.provider === "resend") {
+    if (this.provider === "gmail-api") {
+      this.verifyConnection()
+        .then((res) => {
+          if (res.ok) {
+            this.logger.log(`[email] ✓ Gmail API authentication & token reachability verified: ${res.message}`);
+          } else {
+            this.logger.error(`[email] ✗ Gmail API verification failed: ${res.message}`);
+          }
+        })
+        .catch((err) => {
+          this.logger.error(`[email] ✗ Gmail API verification unexpected error: ${err.message}`);
+        });
+    } else if (this.provider === "resend") {
       this.verifyConnection()
         .then((res) => {
           if (res.ok) {
@@ -188,7 +278,6 @@ export class MailService implements OnModuleInit {
           this.logger.error(`[email] ✗ Resend verification unexpected error: ${err.message}`);
         });
     } else if (this.provider === "smtp" && this.transporter) {
-      // Non-blocking background SMTP connection test on startup
       this.verifyConnection()
         .then((res) => {
           if (res.ok) {
@@ -206,9 +295,130 @@ export class MailService implements OnModuleInit {
   }
 
   /**
+   * Acquires a valid OAuth2 access token for the Gmail API using either
+   * an offline OAuth2 refresh token or a service account JWT bearer flow.
+   * Caches token in memory until expiration.
+   */
+  private async getGmailAccessToken(): Promise<string> {
+    const now = Math.floor(Date.now() / 1000);
+    // Return cached token if valid for at least 60 more seconds
+    if (this.gmailCachedAccessToken && this.gmailTokenExpiresAt > now + 60) {
+      return this.gmailCachedAccessToken;
+    }
+
+    if (this.gmailAuthMethod === "oauth2_refresh_token") {
+      const params = new URLSearchParams({
+        client_id: this.gmailClientId,
+        client_secret: this.gmailClientSecret,
+        refresh_token: this.gmailRefreshToken,
+        grant_type: "refresh_token",
+      });
+
+      const res = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+      });
+
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.access_token) {
+        const safeError = data?.error_description || data?.error || `HTTP_${res.status}`;
+        throw new Error(`Gmail API OAuth2 token refresh failed: ${safeError}`);
+      }
+
+      this.gmailCachedAccessToken = String(data.access_token);
+      this.gmailTokenExpiresAt = now + (data.expires_in || 3600);
+      return this.gmailCachedAccessToken;
+    }
+
+    if (this.gmailAuthMethod === "service_account") {
+      const header = Buffer.from(JSON.stringify({ alg: "RS256", typ: "JWT" })).toString("base64url");
+      const claim = Buffer.from(
+        JSON.stringify({
+          iss: this.googleSaClientEmail,
+          sub: this.gmailSenderEmail,
+          scope: "https://www.googleapis.com/auth/gmail.send",
+          aud: "https://oauth2.googleapis.com/token",
+          iat: now,
+          exp: now + 3600,
+        }),
+      ).toString("base64url");
+
+      const signer = (await import("crypto")).createSign("RSA-SHA256");
+      signer.update(`${header}.${claim}`);
+      const signature = signer.sign(this.googleSaPrivateKey, "base64url");
+      const assertion = `${header}.${claim}.${signature}`;
+
+      const params = new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion,
+      });
+
+      const res = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+      });
+
+      const data: any = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.access_token) {
+        const safeError = data?.error_description || data?.error || `HTTP_${res.status}`;
+        throw new Error(`Gmail API service account token assertion failed: ${safeError}`);
+      }
+
+      this.gmailCachedAccessToken = String(data.access_token);
+      this.gmailTokenExpiresAt = now + (data.expires_in || 3600);
+      return this.gmailCachedAccessToken;
+    }
+
+    throw new Error("No Gmail API authentication credentials configured");
+  }
+
+  /**
    * Safe verification method for diagnostic endpoints and startup checks.
    */
   async verifyConnection(): Promise<{ ok: boolean; message: string; code?: string }> {
+    if (this.provider === "gmail-api") {
+      try {
+        const token = await this.getGmailAccessToken();
+        if (!token) {
+          throw new Error("Unable to obtain Gmail API access token");
+        }
+        // Test Gmail API token validation via Google OAuth tokeninfo endpoint
+        const tokenInfoRes = await fetch(
+          `https://oauth2.googleapis.com/tokeninfo?access_token=${token}`,
+        );
+        const tokenInfo: any = await tokenInfoRes.json().catch(() => ({}));
+
+        if (!tokenInfoRes.ok) {
+          const err = tokenInfo?.error_description || tokenInfo?.error || "Invalid access token";
+          this.smtpVerified = false;
+          this.smtpLastError = String(err);
+          return { ok: false, message: String(err), code: "EGMAIL_TOKEN_INVALID" };
+        }
+
+        const scope = String(tokenInfo?.scope || "");
+        if (!scope.includes("gmail.send") && !scope.includes("mail.google.com")) {
+          const warnMsg = `Token acquired but lacks gmail.send scope (scopes: ${scope})`;
+          this.smtpVerified = false;
+          this.smtpLastError = warnMsg;
+          return { ok: false, message: warnMsg, code: "ESCOPE_MISSING" };
+        }
+
+        this.smtpVerified = true;
+        this.smtpLastError = null;
+        return {
+          ok: true,
+          message: `Gmail API authentication verified for ${this.maskEmail(this.gmailSenderEmail)} (scope: gmail.send)`,
+        };
+      } catch (err: any) {
+        this.smtpVerified = false;
+        const errMsg = err.message || String(err);
+        this.smtpLastError = errMsg;
+        return { ok: false, message: errMsg, code: "EGMAIL_API_AUTH_FAILED" };
+      }
+    }
+
     if (this.provider === "resend") {
       try {
         const controller = new AbortController();
@@ -269,11 +479,27 @@ export class MailService implements OnModuleInit {
    * Diagnostic summary for health checks without leaking credentials.
    */
   getSmtpStatus(): SmtpDiagnosticStatus {
+    if (this.provider === "gmail-api") {
+      return {
+        configured: true,
+        status: this.smtpLastError ? "down" : "up",
+        provider: "gmail-api",
+        transport: "https",
+        host: "gmail.googleapis.com",
+        port: 443,
+        secure: true,
+        sender: this.maskEmail(this.gmailSenderEmail),
+        authMethod: this.gmailAuthMethod === "none" ? undefined : this.gmailAuthMethod,
+        error: this.smtpLastError,
+      };
+    }
+
     if (this.provider === "resend") {
       return {
         configured: true,
         status: this.smtpLastError ? "down" : "up",
         provider: "resend",
+        transport: "https",
         host: "api.resend.com",
         port: 443,
         secure: true,
@@ -286,6 +512,7 @@ export class MailService implements OnModuleInit {
         configured: false,
         status: "not_configured",
         provider: "none",
+        transport: "none",
       };
     }
 
@@ -293,6 +520,7 @@ export class MailService implements OnModuleInit {
       configured: true,
       status: this.smtpVerified ? "up" : this.smtpLastError ? "down" : "unverified",
       provider: "smtp",
+      transport: "smtp",
       host: this.host,
       port: this.port,
       secure: this.port === 465,
@@ -367,6 +595,7 @@ export class MailService implements OnModuleInit {
       tcp25: { status: "TESTING" },
       https443: { status: "TESTING" },
       smtpHandshake: { status: "NOT REACHED" },
+      gmailApiAuth: { status: "TESTING" },
       analysis: "",
     };
 
@@ -393,10 +622,24 @@ export class MailService implements OnModuleInit {
     // 4. TCP 25
     diagnostic.tcp25 = await this.testTcp(host, 25, 3000);
 
-    // 5. HTTPS 443 (test reachability to api.resend.com)
-    diagnostic.https443 = await this.testTcp("api.resend.com", 443, 3000);
+    // 5. HTTPS 443 (test reachability to gmail.googleapis.com)
+    diagnostic.https443 = await this.testTcp("gmail.googleapis.com", 443, 3000);
 
-    // 6. SMTP Handshake / AUTH if TCP 587 or 465 passed
+    // 6. Gmail API Auth Check
+    if (this.provider === "gmail-api") {
+      const v = await this.verifyConnection();
+      diagnostic.gmailApiAuth = {
+        status: v.ok ? "PASS" : "FAIL",
+        message: v.message,
+        code: v.code,
+      };
+      diagnostic.analysis = v.ok
+        ? "GMAIL_API_ACTIVE_AND_HEALTHY: Email is routed over HTTPS/443 directly to Gmail API using the official sender mailbox. Outbound SMTP port restrictions do not apply."
+        : `GMAIL_API_AUTH_ISSUE: ${v.message}`;
+      return diagnostic;
+    }
+
+    // SMTP Handshake / AUTH if TCP 587 or 465 passed
     if (diagnostic.tcp587.status === "PASS" || diagnostic.tcp465.status === "PASS") {
       if (this.transporter && this.isSmtpConfigured) {
         const verifyRes = await this.verifyConnection();
@@ -420,19 +663,14 @@ export class MailService implements OnModuleInit {
 
     // Analysis
     if (this.provider === "resend") {
-      diagnostic.analysis =
-        diagnostic.https443.status === "PASS"
-          ? "RESEND_ACTIVE_AND_REACHABLE: Resend HTTPS REST API is the active, prioritized email provider. Connectivity to api.resend.com:443 is confirmed. Direct SMTP port restrictions do not affect delivery."
-          : "RESEND_ACTIVE_BUT_PORT_443_ISSUE: Resend is selected as the active provider, but connection to api.resend.com:443 failed.";
+      diagnostic.analysis = "RESEND_ACTIVE: Resend HTTPS REST API is the active email provider.";
     } else if (
       diagnostic.tcp587.status === "FAIL" &&
       diagnostic.tcp465.status === "FAIL" &&
       diagnostic.https443.status === "PASS"
     ) {
       diagnostic.analysis =
-        "RAILWAY_OUTBOUND_SMTP_RESTRICTION_CONFIRMED: Railway blocks direct outbound TCP connections on SMTP ports 25, 465, and 587. Standard HTTPS on port 443 is OPEN. Configure RESEND_API_KEY to route transactional email via HTTPS API.";
-    } else if (diagnostic.tcp587.status === "PASS" || diagnostic.tcp465.status === "PASS") {
-      diagnostic.analysis = "Outbound TCP connectivity to SMTP server is open and reachable.";
+        "RAILWAY_OUTBOUND_SMTP_RESTRICTION_CONFIRMED: Railway blocks direct outbound TCP connections on SMTP ports 25, 465, and 587. Standard HTTPS on port 443 is OPEN. Configure Gmail API variables to send emails via Gmail API over HTTPS.";
     } else {
       diagnostic.analysis = "Network connectivity diagnostic complete.";
     }
@@ -451,8 +689,131 @@ export class MailService implements OnModuleInit {
   }
 
   /**
+   * Sends an email via Google Gmail REST API (POST https://gmail.googleapis.com/gmail/v1/users/me/messages/send)
+   * over HTTPS port 443.
+   *
+   * Formats a complete, standard RFC 2822 / MIME message via nodemailer streamTransport
+   * (supporting From, To, Subject, HTML, Text, attachments, inline images) and encodes
+   * it as base64url for Gmail API.
+   *
+   * NEVER logs authorization headers, tokens, or client secrets.
+   */
+  private async sendViaGmailApi(
+    mailOptions: nodemailer.SendMailOptions,
+    logRecordId: string | undefined,
+    maskedRecipient: string,
+  ): Promise<{ success: boolean; messageId?: string; error?: string; code?: string }> {
+    const from = mailOptions.from || `Success MP Online <${this.gmailSenderEmail}>`;
+    this.logger.log(
+      `[gmail-api] send started: from="${from}" to=${maskedRecipient} subject="${String(mailOptions.subject || "")}"`,
+    );
+
+    try {
+      // 1. Acquire valid access token over HTTPS/443
+      const accessToken = await this.getGmailAccessToken();
+
+      // 2. Build complete RFC 2822 MIME message using nodemailer's stream transport
+      const mimeTransport = nodemailer.createTransport({
+        streamTransport: true,
+        buffer: true,
+      });
+
+      const mimeResult: any = await new Promise((resolve, reject) => {
+        mimeTransport.sendMail(
+          {
+            ...mailOptions,
+            from,
+          },
+          (err, info) => {
+            if (err) return reject(err);
+            resolve(info);
+          },
+        );
+      });
+
+      const rawMimeBuffer: Buffer = mimeResult.message;
+      if (!rawMimeBuffer || rawMimeBuffer.length === 0) {
+        throw new Error("Failed to generate RFC 2822 MIME message buffer");
+      }
+
+      // 3. Base64url encode the MIME message for the Gmail API payload
+      const rawBase64Url = rawMimeBuffer.toString("base64url");
+
+      // 4. POST to Gmail API https://gmail.googleapis.com/gmail/v1/users/me/messages/send
+      this.logger.log(
+        `[gmail-api] POST https://gmail.googleapis.com/gmail/v1/users/me/messages/send — EXECUTING`,
+      );
+
+      const res = await fetch(
+        "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ raw: rawBase64Url }),
+        },
+      );
+
+      const status = res.status;
+      const data: any = await res.json().catch(() => ({}));
+
+      if (res.ok && data?.id) {
+        const messageId = data.id;
+        this.logger.log(
+          `[gmail-api] send accepted: Gmail message ID=${messageId} (threadId: ${data.threadId || "none"})`,
+        );
+
+        if (logRecordId) {
+          await this.prisma.notificationLog
+            .update({
+              where: { id: logRecordId },
+              data: { status: NotificationStatus.SENT, sentAt: new Date(), error: null },
+            })
+            .catch(() => {});
+        }
+
+        return { success: true, messageId };
+      } else {
+        // Safe error logging: no secrets or auth tokens logged
+        const safeError = data?.error?.message || data?.error || `Gmail API HTTP error ${status}`;
+        const safeCode = data?.error?.status || `HTTP_${status}`;
+        this.logger.error(
+          `[gmail-api] send failed: status=${status} code=${safeCode} message="${safeError}"`,
+        );
+
+        if (logRecordId) {
+          await this.prisma.notificationLog
+            .update({
+              where: { id: logRecordId },
+              data: { status: NotificationStatus.FAILED, error: safeError },
+            })
+            .catch(() => {});
+        }
+
+        return { success: false, error: safeError, code: safeCode };
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || String(err);
+      this.logger.error(`[gmail-api] unexpected send error: ${errorMsg}`);
+
+      if (logRecordId) {
+        await this.prisma.notificationLog
+          .update({
+            where: { id: logRecordId },
+            data: { status: NotificationStatus.FAILED, error: errorMsg },
+          })
+          .catch(() => {});
+      }
+
+      return { success: false, error: errorMsg, code: "EGMAIL_SEND_ERROR" };
+    }
+  }
+
+  /**
    * Dispatches email via Resend HTTPS REST API (port 443).
-   * Used when RESEND_API_KEY is configured (recommended for Railway deployment).
+   * Secondary fallback if GMAIL_API is not configured.
    */
   private async sendViaResend(
     mailOptions: nodemailer.SendMailOptions,
@@ -463,7 +824,6 @@ export class MailService implements OnModuleInit {
       ? mailOptions.to.map((t) => String(t))
       : [String(mailOptions.to || "")];
 
-    // Priority: configured RESEND_FROM; allow custom mailOptions.from if not Gmail and not default
     let resendFrom = this.resendFrom;
     if (
       mailOptions.from &&
@@ -474,7 +834,6 @@ export class MailService implements OnModuleInit {
       resendFrom = mailOptions.from;
     }
 
-    // Replace inline CID logo with public HTTPS logo URL for Resend
     let htmlContent = mailOptions.html as string | undefined;
     if (typeof htmlContent === "string" && htmlContent.includes(`cid:${LOGO_CID}`)) {
       const publicLogoUrl = this.frontendUrl
@@ -483,7 +842,6 @@ export class MailService implements OnModuleInit {
       htmlContent = htmlContent.split(`cid:${LOGO_CID}`).join(publicLogoUrl);
     }
 
-    // Build payload for Resend
     const payload: any = {
       from: resendFrom,
       to,
@@ -492,9 +850,6 @@ export class MailService implements OnModuleInit {
       text: mailOptions.text,
     };
 
-    // Filter out CID logo attachment since it's already replaced by public HTTPS URL.
-    // Real file attachments are formatted strictly per Resend API schema: { filename, content }.
-    // NEVER pass `id` or `content_type` unless `id` is a valid UUID, as Resend validates `id` as UUID.
     if (Array.isArray(mailOptions.attachments) && mailOptions.attachments.length > 0) {
       const realAttachments = mailOptions.attachments.filter(
         (att: any) => att.cid !== LOGO_CID && att.id !== LOGO_CID,
@@ -519,18 +874,12 @@ export class MailService implements OnModuleInit {
       }
     }
 
-    // ── DIAGNOSTIC: log exact sender and masked recipient BEFORE POST ──
     this.logger.log(
       `[resend-diag] sendViaResend() CALLED — from="${resendFrom}" to=${maskedRecipient} subject="${String(mailOptions.subject || "")}"`,
     );
-    this.logger.log(
-      `[resend-diag] POST https://api.resend.com/emails — EXECUTING NOW`,
-    );
 
-    // Helper to execute the Resend HTTPS POST
     const executeResendPost = async (fromAddress: string, attempt: string) => {
       payload.from = fromAddress;
-      // Log the exact sender being submitted (never log API key or Authorization header)
       this.logger.log(
         `[resend-diag] attempt=${attempt} submitting from="${fromAddress}" to=${maskedRecipient}`,
       );
@@ -545,7 +894,6 @@ export class MailService implements OnModuleInit {
       const status = res.status;
       const data: any = await res.json().catch(() => ({}));
 
-      // ── DIAGNOSTIC: log full safe Resend response (no secrets) ──
       const safeBody = {
         id: data?.id ?? null,
         name: data?.name ?? null,
@@ -574,9 +922,6 @@ export class MailService implements OnModuleInit {
       let { res, status, data } = await executeResendPost(resendFrom, "primary");
       this.logger.log(`[email] provider=resend response status=${status}`);
 
-      // ── BROADENED domain-verification check ──
-      // Trigger sandbox fallback on ANY 403 (Resend uses 403 for unverified sender domains)
-      // OR 422 validation_error that mentions domain/verification.
       const isDomainVerificationError =
         status === 403 ||
         ((status === 403 || status === 422) &&
@@ -659,7 +1004,7 @@ export class MailService implements OnModuleInit {
 
     if (this.provider === "none") {
       const errorMsg = this.isProduction
-        ? "Neither RESEND_API_KEY nor SMTP credentials are configured on the production server."
+        ? "No valid production email credentials (Gmail API) are configured on the production server."
         : "Email service is not configured in development environment.";
       this.logger.error(`[email] send failed: ${errorMsg} { code: "EEMAIL_NOT_CONFIGURED" }`);
 
@@ -722,7 +1067,12 @@ export class MailService implements OnModuleInit {
       }
     }
 
-    // If active provider is Resend HTTPS API, route via Resend (never touches SMTP)
+    // 1. If active provider is Gmail API (HTTPS port 443), route directly to Gmail API
+    if (this.provider === "gmail-api") {
+      return this.sendViaGmailApi(mailOptions, options.logRecordId, maskedRecipient);
+    }
+
+    // 2. If active provider is Resend HTTPS API, route via Resend (never touches SMTP)
     if (this.provider === "resend") {
       return this.sendViaResend(mailOptions, options.logRecordId, maskedRecipient);
     }
